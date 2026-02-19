@@ -1,8 +1,9 @@
 /**
  * AI Storyboard & Edit Plan Generation
  *
- * Primary: OpenAI gpt-4.1-mini (via OPENAI_API_KEY + OPENAI_BASE_URL)
- * Fallback: Kimi K2.5 (moonshot-v1-128k) if KIMI_API_KEY is valid
+ * Primary: gemini-2.5-flash with VISION (via OPENAI_API_KEY + OPENAI_BASE_URL)
+ * Fallback: gpt-4.1-mini (text-only, via same endpoint)
+ * Legacy fallback: Kimi K2.5 (moonshot-v1-128k) if KIMI_API_KEY is valid
  *
  * Structured JSON output with Zod validation.
  */
@@ -17,7 +18,11 @@ const OPENAI_BASE_URL =
   process.env.OPENAI_API_BASE ??
   "https://api.openai.com/v1";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY!;
-const OPENAI_MODEL = "gpt-4.1-mini";
+
+// Vision model for storyboard generation (can actually see images)
+const VISION_MODEL = "gemini-2.5-flash";
+// Text-only fallback
+const TEXT_MODEL = "gpt-4.1-mini";
 
 // Kimi (kept for reference; will only be used if OPENAI_API_KEY is not set)
 const KIMI_BASE_URL = process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1";
@@ -128,9 +133,15 @@ function getWalkthroughPriority(roomType: string): number {
 
 // ─── Helper ─────────────────────────────────────────────────────────────────
 
+/** Content part for multimodal messages */
+type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string; detail?: "low" | "high" | "auto" } };
+
+/** Chat message supporting both string and multimodal content */
 interface ChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  content: string | ContentPart[];
 }
 
 interface ChatCompletionResponse {
@@ -142,9 +153,13 @@ interface ChatCompletionResponse {
 }
 
 /**
- * Call the OpenAI-compatible API (primary provider: gpt-4.1-mini).
+ * Call the OpenAI-compatible API with vision support.
+ * Supports both text-only and multimodal (image) messages.
  */
-async function callOpenAI(messages: ChatMessage[]): Promise<string> {
+async function callVisionAI(
+  messages: ChatMessage[],
+  model: string = VISION_MODEL,
+): Promise<string> {
   const res = await fetch(`${OPENAI_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -152,7 +167,7 @@ async function callOpenAI(messages: ChatMessage[]): Promise<string> {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: OPENAI_MODEL,
+      model,
       messages,
       temperature: 0.3,
       response_format: { type: "json_object" },
@@ -161,24 +176,44 @@ async function callOpenAI(messages: ChatMessage[]): Promise<string> {
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenAI API error ${res.status}: ${text}`);
+    throw new Error(`AI API error (${model}) ${res.status}: ${text}`);
   }
 
   const data = (await res.json()) as ChatCompletionResponse;
   const content = data.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error("Empty response from OpenAI API");
+    throw new Error(`Empty response from AI API (${model})`);
   }
   return content;
 }
 
 /**
+ * Call the OpenAI-compatible API (text-only, for non-vision use cases).
+ */
+async function callOpenAI(messages: ChatMessage[]): Promise<string> {
+  return callVisionAI(messages, TEXT_MODEL);
+}
+
+/**
  * Call the Kimi API (fallback, only if KIMI_API_KEY is set).
+ * Kimi only supports string content, so we convert multimodal messages.
  */
 async function callKimi(messages: ChatMessage[]): Promise<string> {
   if (!KIMI_API_KEY) {
     throw new Error("KIMI_API_KEY is not set");
   }
+
+  // Convert multimodal content to text-only for Kimi
+  const textMessages = messages.map((msg) => ({
+    role: msg.role,
+    content:
+      typeof msg.content === "string"
+        ? msg.content
+        : msg.content
+            .filter((p): p is { type: "text"; text: string } => p.type === "text")
+            .map((p) => p.text)
+            .join("\n"),
+  }));
 
   const res = await fetch(`${KIMI_BASE_URL}/chat/completions`, {
     method: "POST",
@@ -188,7 +223,7 @@ async function callKimi(messages: ChatMessage[]): Promise<string> {
     },
     body: JSON.stringify({
       model: KIMI_MODEL,
-      messages,
+      messages: textMessages,
       temperature: 0.3,
       response_format: { type: "json_object" },
     }),
@@ -208,15 +243,27 @@ async function callKimi(messages: ChatMessage[]): Promise<string> {
 }
 
 /**
- * Call AI with automatic fallback: try OpenAI first, then Kimi.
+ * Call AI with automatic fallback chain:
+ * 1. Vision model (gemini-2.5-flash) — can see images
+ * 2. Text model (gpt-4.1-mini) — text-only fallback
+ * 3. Kimi (moonshot-v1-128k) — legacy fallback
  */
-async function callAI(messages: ChatMessage[]): Promise<string> {
-  // Primary: OpenAI gpt-4.1-mini
+async function callAI(messages: ChatMessage[], useVision: boolean = false): Promise<string> {
   if (OPENAI_API_KEY) {
+    // Try vision model first if requested
+    if (useVision) {
+      try {
+        return await callVisionAI(messages, VISION_MODEL);
+      } catch (err) {
+        console.error(`[AI] Vision model (${VISION_MODEL}) failed, trying text model:`, err);
+      }
+    }
+
+    // Try text model
     try {
       return await callOpenAI(messages);
     } catch (err) {
-      console.error("[AI] OpenAI call failed, trying Kimi fallback:", err);
+      console.error(`[AI] Text model (${TEXT_MODEL}) failed, trying Kimi fallback:`, err);
     }
   }
 
@@ -228,6 +275,7 @@ async function callAI(messages: ChatMessage[]): Promise<string> {
 
 /**
  * Generate room tags and a storyboard from uploaded photos.
+ * Uses vision model to ACTUALLY SEE the photos for accurate room detection.
  */
 export async function generateStoryboard(params: {
   assets: Array<{
@@ -240,10 +288,11 @@ export async function generateStoryboard(params: {
   sceneRange: { min: number; max: number };
   propertyTitle?: string | undefined;
 }): Promise<StoryboardResponse> {
+  // Build text asset list for reference
   const assetList = params.assets
     .map(
       (a, i) =>
-        `${i + 1}. ID: ${a.id} | URL: ${a.storage_url}${a.room_type ? ` | Room: ${a.room_type}` : ""}`
+        `Photo ${i + 1}: ID="${a.id}"${a.room_type ? ` | Previously tagged: ${a.room_type}` : ""}`
     )
     .join("\n");
 
@@ -260,7 +309,7 @@ You MUST respond with valid JSON matching this exact schema:
 ROOM IDENTIFICATION — Use these VISUAL CUES to identify each room:
 ═══════════════════════════════════════════════════════════════
 
-You MUST identify rooms based on what you can see in the photo. Use these definitive visual cues:
+You can SEE each photo. Identify rooms based on what you ACTUALLY SEE in each image. Use these definitive visual cues:
 
 • "aerial" — Bird's-eye / drone shot looking DOWN at the roof, property from above, overhead perspective of the lot
 • "exterior" — Outside view of the house: you can see the building facade, front door from outside, driveway, landscaping, siding/brick, garage door from outside, curb view
@@ -282,7 +331,7 @@ You MUST identify rooms based on what you can see in the photo. Use these defini
 • "mudroom" — Between garage/exterior and interior: cubbies, hooks, bench, shoe storage, coat rack
 • "basement" — Below-grade: lower ceiling, small/high windows, exposed ductwork possible, walkout door possible
 • "pool" — Swimming pool water visible, pool deck, lounge chairs, pool equipment
-• "patio" — Outdoor living: patio furniture, outdoor dining set, covered or uncovered, pavers/concrete pad, sometimes outdoor kitchen/grill
+• "patio" — Ground-level outdoor living: pavers/concrete, outdoor furniture, grill, covered or uncovered, attached to house
 • "deck" — Elevated wood/composite platform: railing, outdoor furniture, attached to house, elevated above ground
 • "backyard" — Rear yard: lawn/grass, fence, landscaping, play equipment, open green space
 • "garden" — Landscaped garden: flower beds, garden paths, water features, mature plantings, ornamental plants
@@ -356,12 +405,45 @@ ADDITIONAL RULES:
 - IMPORTANT: Use the exact asset IDs provided — do not invent new IDs
 - If multiple photos show the same room from different angles, pick the BEST angle for the storyboard`;
 
-  const userPrompt = `Create a storyboard for this property listing${params.propertyTitle ? ` "${params.propertyTitle}"` : ""}.
+  // Build multimodal user content with images
+  const userContentParts: ContentPart[] = [];
 
-Here are the uploaded photos (use these exact IDs in your response):
+  // Text introduction
+  userContentParts.push({
+    type: "text",
+    text: `Create a storyboard for this property listing${params.propertyTitle ? ` "${params.propertyTitle}"` : ""}.
+
+I am providing ${params.assets.length} listing photos below. LOOK at each photo carefully to identify the room type.
+
+Here are the photos with their asset IDs (use these exact IDs in your response):
 ${assetList}
 
-Generate a cinematic storyboard with ${params.sceneRange.min}-${params.sceneRange.max} scenes. Every scene must use one of the asset IDs listed above.
+The photos are attached below in order. Each photo is labeled with its asset ID.`,
+  });
+
+  // Add each photo as an image_url content part
+  // For large sets (>20 photos), use "low" detail to stay within token limits
+  const imageDetail = params.assets.length > 20 ? "low" : "auto";
+
+  for (const asset of params.assets) {
+    // Label each image with its asset ID
+    userContentParts.push({
+      type: "text",
+      text: `[Photo ID: ${asset.id}]`,
+    });
+    userContentParts.push({
+      type: "image_url",
+      image_url: {
+        url: asset.storage_url,
+        detail: imageDetail,
+      },
+    });
+  }
+
+  // Final instruction after all images
+  userContentParts.push({
+    type: "text",
+    text: `Generate a cinematic storyboard with ${params.sceneRange.min}-${params.sceneRange.max} scenes. Every scene must use one of the asset IDs listed above.
 
 REMEMBER: You are a professional real estate videographer. Order the scenes EXACTLY as you would walk a buyer through the home:
 1. Start OUTSIDE (aerial/exterior)
@@ -371,14 +453,19 @@ REMEMBER: You are a professional real estate videographer. Order the scenes EXAC
 5. Show utility spaces (office, laundry, garage)
 6. End OUTSIDE (patio, backyard, pool, garden, closing aerial)
 
-The walkthrough order is the MOST IMPORTANT aspect of this storyboard. A viewer should feel like they are physically walking through the home.`;
+The walkthrough order is the MOST IMPORTANT aspect of this storyboard. A viewer should feel like they are physically walking through the home.`,
+  });
 
-  console.log(`[AI] Generating storyboard for ${params.assets.length} assets, style=${params.stylePackId}, cut=${params.cutLength}`);
+  console.log(`[AI] Generating storyboard for ${params.assets.length} assets, style=${params.stylePackId}, cut=${params.cutLength}, using vision model`);
 
-  const content = await callAI([
-    { role: "system", content: systemPrompt },
-    { role: "user", content: userPrompt },
-  ]);
+  // Use vision model for storyboard generation (can see images)
+  const content = await callAI(
+    [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContentParts },
+    ],
+    true, // useVision = true
+  );
 
   // Parse and validate
   let parsed: unknown;
@@ -514,6 +601,7 @@ ${propertyDetails}
 Available Clips:
 ${sceneList}`;
 
+  // Edit plan is text-only (no images needed)
   const content = await callAI([
     { role: "system", content: systemPrompt },
     { role: "user", content: userPrompt },

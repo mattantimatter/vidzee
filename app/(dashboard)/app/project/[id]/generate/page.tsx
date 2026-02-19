@@ -157,10 +157,10 @@ export default function GeneratePage(): ReactNode {
     : null;
 
   return (
-    <div className="flex gap-6 h-full p-4 md:p-6 lg:p-8">
+    <div className="flex gap-6 h-full min-h-0 p-4 md:p-6 lg:p-8">
       {/* Left Panel */}
       <div
-        className="flex-1 min-w-0 overflow-y-auto overscroll-contain"
+        className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         <div className="flex items-center justify-between mb-6">

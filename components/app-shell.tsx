@@ -80,7 +80,7 @@ export function AppShell({
         </Link>
 
         {/* Main nav icons */}
-        <nav className="flex flex-col gap-1 flex-1 px-2">
+        <nav className={`flex flex-col gap-1 flex-1 ${expanded ? "px-2" : "px-0"}`}>
           {iconNavItems.map((item) => {
             const isActive =
               item.href === "/app"
@@ -112,7 +112,7 @@ export function AppShell({
         </nav>
 
         {/* Bottom icons */}
-        <div className="flex flex-col gap-1 mt-auto px-2">
+        <div className={`flex flex-col gap-1 mt-auto ${expanded ? "px-2" : "px-0"}`}>
           {bottomNavItems.map((item) => (
             <Link
               key={item.label}
@@ -247,7 +247,7 @@ export function AppShell({
         className="h-screen pt-14 md:pt-0 overflow-hidden bg-neutral-50/80 dark:bg-background"
         style={{ marginLeft: `${SIDEBAR_COLLAPSED_W}px` }}
       >
-        <div className="h-full flex flex-col">
+        <div className="h-full flex flex-col min-h-0">
           {children}
         </div>
       </main>
