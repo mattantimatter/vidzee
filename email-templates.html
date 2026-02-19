@@ -1,0 +1,403 @@
+<!--
+  VIDZEE — BRANDED EMAIL TEMPLATES FOR SUPABASE
+  ================================================
+  Instructions:
+  1. Go to Supabase Dashboard → Authentication → Email Templates
+  2. Select "Confirm signup" template
+  3. Copy the HTML between the CONFIRM SIGNUP markers below
+  4. Paste into the "Message" field in Supabase
+  5. Set Subject to: Confirm your Vidzee account
+  6. Repeat for other templates as needed
+
+  Supabase template variables:
+    {{ .ConfirmationURL }} — the confirmation link
+    {{ .Email }}           — the user's email address
+    {{ .Token }}           — the OTP token (for OTP emails)
+    {{ .SiteURL }}         — your site URL
+-->
+
+<!-- ============================================================
+     TEMPLATE 1: CONFIRM SIGNUP
+     Subject: Confirm your Vidzee account
+     ============================================================ -->
+
+<!-- CONFIRM SIGNUP START -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirm your Vidzee account</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #f5f5f5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #111111;
+    }
+    .wrapper {
+      max-width: 560px;
+      margin: 40px auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: #ffffff;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+    }
+    .header {
+      background: linear-gradient(135deg, #22d3ee 0%, #0ea5e9 100%);
+      padding: 40px 40px 36px;
+      text-align: center;
+    }
+    .logo-circle {
+      width: 52px;
+      height: 52px;
+      background: rgba(255,255,255,0.25);
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .logo-text {
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffffff;
+      letter-spacing: -0.5px;
+      line-height: 1;
+    }
+    .tagline {
+      font-size: 13px;
+      color: rgba(255,255,255,0.8);
+      margin-top: 6px;
+      letter-spacing: 0.3px;
+    }
+    .body {
+      padding: 40px 40px 32px;
+    }
+    .greeting {
+      font-size: 22px;
+      font-weight: 600;
+      color: #111111;
+      margin-bottom: 12px;
+      letter-spacing: -0.3px;
+    }
+    .message {
+      font-size: 15px;
+      line-height: 1.65;
+      color: #555555;
+      margin-bottom: 32px;
+    }
+    .btn-wrapper {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .btn {
+      display: inline-block;
+      background: #22d3ee;
+      color: #ffffff !important;
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 600;
+      padding: 14px 36px;
+      border-radius: 12px;
+      letter-spacing: 0.2px;
+    }
+    .btn:hover {
+      background: #0ea5e9;
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #eeeeee;
+      margin: 28px 0;
+    }
+    .fallback {
+      font-size: 13px;
+      color: #888888;
+      line-height: 1.6;
+    }
+    .fallback a {
+      color: #22d3ee;
+      word-break: break-all;
+    }
+    .footer {
+      background: #f9f9f9;
+      border-top: 1px solid #eeeeee;
+      padding: 24px 40px;
+      text-align: center;
+    }
+    .footer-logo {
+      font-size: 15px;
+      font-weight: 600;
+      color: #333333;
+      margin-bottom: 6px;
+    }
+    .footer-sub {
+      font-size: 12px;
+      color: #aaaaaa;
+      line-height: 1.5;
+    }
+    .footer-links {
+      margin-top: 12px;
+      font-size: 12px;
+    }
+    .footer-links a {
+      color: #aaaaaa;
+      text-decoration: none;
+      margin: 0 8px;
+    }
+    @media (max-width: 600px) {
+      .body, .header, .footer { padding-left: 24px; padding-right: 24px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <!-- Header -->
+      <div class="header">
+        <div>
+          <div class="logo-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 8L12 4L20 8V16L12 20L4 16V8Z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M9 12L11 14L15 10" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="logo-text">Vidzee</div>
+          <div class="tagline">AI-Powered Real Estate Videos</div>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="body">
+        <p class="greeting">Welcome to Vidzee! 🎬</p>
+        <p class="message">
+          You're one step away from creating stunning, AI-powered listing videos in minutes.
+          Click the button below to confirm your email address and activate your account.
+        </p>
+
+        <div class="btn-wrapper">
+          <a href="{{ .ConfirmationURL }}" class="btn">
+            Confirm My Account
+          </a>
+        </div>
+
+        <hr class="divider" />
+
+        <p class="fallback">
+          If the button above doesn't work, copy and paste this link into your browser:
+          <br />
+          <a href="{{ .ConfirmationURL }}">{{ .ConfirmationURL }}</a>
+        </p>
+
+        <hr class="divider" />
+
+        <p class="fallback">
+          If you didn't create a Vidzee account, you can safely ignore this email.
+          This link will expire in 24 hours.
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <div class="footer-logo">Vidzee</div>
+        <div class="footer-sub">
+          Turn listing photos into cinematic videos — in minutes, not days.
+        </div>
+        <div class="footer-links">
+          <a href="https://vidzee.vercel.app">Website</a>
+          <a href="https://vidzee.vercel.app/app">Dashboard</a>
+          <a href="mailto:support@vidzee.app">Support</a>
+        </div>
+        <div class="footer-sub" style="margin-top: 12px;">
+          &copy; 2026 Vidzee. All rights reserved.
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+<!-- CONFIRM SIGNUP END -->
+
+
+<!-- ============================================================
+     TEMPLATE 2: MAGIC LINK / OTP LOGIN
+     Subject: Your Vidzee login link
+     ============================================================ -->
+
+<!-- MAGIC LINK START -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Your Vidzee login link</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #f5f5f5;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      color: #111111;
+    }
+    .wrapper { max-width: 560px; margin: 40px auto; padding: 0 16px; }
+    .card { background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+    .header { background: linear-gradient(135deg, #22d3ee 0%, #0ea5e9 100%); padding: 40px 40px 36px; text-align: center; }
+    .logo-circle { width: 52px; height: 52px; background: rgba(255,255,255,0.25); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+    .logo-text { font-size: 28px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px; line-height: 1; }
+    .tagline { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 6px; }
+    .body { padding: 40px 40px 32px; }
+    .greeting { font-size: 22px; font-weight: 600; color: #111111; margin-bottom: 12px; letter-spacing: -0.3px; }
+    .message { font-size: 15px; line-height: 1.65; color: #555555; margin-bottom: 32px; }
+    .btn-wrapper { text-align: center; margin-bottom: 32px; }
+    .btn { display: inline-block; background: #22d3ee; color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 600; padding: 14px 36px; border-radius: 12px; }
+    .divider { border: none; border-top: 1px solid #eeeeee; margin: 28px 0; }
+    .fallback { font-size: 13px; color: #888888; line-height: 1.6; }
+    .fallback a { color: #22d3ee; word-break: break-all; }
+    .footer { background: #f9f9f9; border-top: 1px solid #eeeeee; padding: 24px 40px; text-align: center; }
+    .footer-logo { font-size: 15px; font-weight: 600; color: #333333; margin-bottom: 6px; }
+    .footer-sub { font-size: 12px; color: #aaaaaa; line-height: 1.5; }
+    .footer-links { margin-top: 12px; font-size: 12px; }
+    .footer-links a { color: #aaaaaa; text-decoration: none; margin: 0 8px; }
+    @media (max-width: 600px) { .body, .header, .footer { padding-left: 24px; padding-right: 24px; } }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="header">
+        <div>
+          <div class="logo-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 8L12 4L20 8V16L12 20L4 16V8Z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M9 12L11 14L15 10" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="logo-text">Vidzee</div>
+          <div class="tagline">AI-Powered Real Estate Videos</div>
+        </div>
+      </div>
+      <div class="body">
+        <p class="greeting">Your login link is ready</p>
+        <p class="message">
+          Click the button below to sign in to your Vidzee account. This link is valid for 1 hour and can only be used once.
+        </p>
+        <div class="btn-wrapper">
+          <a href="{{ .ConfirmationURL }}" class="btn">Sign In to Vidzee</a>
+        </div>
+        <hr class="divider" />
+        <p class="fallback">
+          If the button doesn't work, copy and paste this link:<br />
+          <a href="{{ .ConfirmationURL }}">{{ .ConfirmationURL }}</a>
+        </p>
+        <hr class="divider" />
+        <p class="fallback">
+          If you didn't request this login link, you can safely ignore this email.
+        </p>
+      </div>
+      <div class="footer">
+        <div class="footer-logo">Vidzee</div>
+        <div class="footer-sub">Turn listing photos into cinematic videos — in minutes, not days.</div>
+        <div class="footer-links">
+          <a href="https://vidzee.vercel.app">Website</a>
+          <a href="https://vidzee.vercel.app/app">Dashboard</a>
+          <a href="mailto:support@vidzee.app">Support</a>
+        </div>
+        <div class="footer-sub" style="margin-top: 12px;">&copy; 2026 Vidzee. All rights reserved.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+<!-- MAGIC LINK END -->
+
+
+<!-- ============================================================
+     TEMPLATE 3: RESET PASSWORD
+     Subject: Reset your Vidzee password
+     ============================================================ -->
+
+<!-- RESET PASSWORD START -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset your Vidzee password</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background-color: #f5f5f5; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #111111; }
+    .wrapper { max-width: 560px; margin: 40px auto; padding: 0 16px; }
+    .card { background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 4px 24px rgba(0,0,0,0.06); }
+    .header { background: linear-gradient(135deg, #22d3ee 0%, #0ea5e9 100%); padding: 40px 40px 36px; text-align: center; }
+    .logo-circle { width: 52px; height: 52px; background: rgba(255,255,255,0.25); border: 2px solid rgba(255,255,255,0.4); border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin-bottom: 16px; }
+    .logo-text { font-size: 28px; font-weight: 700; color: #ffffff; letter-spacing: -0.5px; line-height: 1; }
+    .tagline { font-size: 13px; color: rgba(255,255,255,0.8); margin-top: 6px; }
+    .body { padding: 40px 40px 32px; }
+    .greeting { font-size: 22px; font-weight: 600; color: #111111; margin-bottom: 12px; letter-spacing: -0.3px; }
+    .message { font-size: 15px; line-height: 1.65; color: #555555; margin-bottom: 32px; }
+    .btn-wrapper { text-align: center; margin-bottom: 32px; }
+    .btn { display: inline-block; background: #22d3ee; color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 600; padding: 14px 36px; border-radius: 12px; }
+    .divider { border: none; border-top: 1px solid #eeeeee; margin: 28px 0; }
+    .fallback { font-size: 13px; color: #888888; line-height: 1.6; }
+    .fallback a { color: #22d3ee; word-break: break-all; }
+    .footer { background: #f9f9f9; border-top: 1px solid #eeeeee; padding: 24px 40px; text-align: center; }
+    .footer-logo { font-size: 15px; font-weight: 600; color: #333333; margin-bottom: 6px; }
+    .footer-sub { font-size: 12px; color: #aaaaaa; line-height: 1.5; }
+    .footer-links { margin-top: 12px; font-size: 12px; }
+    .footer-links a { color: #aaaaaa; text-decoration: none; margin: 0 8px; }
+    @media (max-width: 600px) { .body, .header, .footer { padding-left: 24px; padding-right: 24px; } }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="card">
+      <div class="header">
+        <div>
+          <div class="logo-circle">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 8L12 4L20 8V16L12 20L4 16V8Z" stroke="white" stroke-width="2" stroke-linejoin="round"/>
+              <path d="M9 12L11 14L15 10" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="logo-text">Vidzee</div>
+          <div class="tagline">AI-Powered Real Estate Videos</div>
+        </div>
+      </div>
+      <div class="body">
+        <p class="greeting">Reset your password</p>
+        <p class="message">
+          We received a request to reset the password for your Vidzee account. Click the button below to choose a new password. This link expires in 1 hour.
+        </p>
+        <div class="btn-wrapper">
+          <a href="{{ .ConfirmationURL }}" class="btn">Reset My Password</a>
+        </div>
+        <hr class="divider" />
+        <p class="fallback">
+          If the button doesn't work, copy and paste this link:<br />
+          <a href="{{ .ConfirmationURL }}">{{ .ConfirmationURL }}</a>
+        </p>
+        <hr class="divider" />
+        <p class="fallback">
+          If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+        </p>
+      </div>
+      <div class="footer">
+        <div class="footer-logo">Vidzee</div>
+        <div class="footer-sub">Turn listing photos into cinematic videos — in minutes, not days.</div>
+        <div class="footer-links">
+          <a href="https://vidzee.vercel.app">Website</a>
+          <a href="https://vidzee.vercel.app/app">Dashboard</a>
+          <a href="mailto:support@vidzee.app">Support</a>
+        </div>
+        <div class="footer-sub" style="margin-top: 12px;">&copy; 2026 Vidzee. All rights reserved.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+<!-- RESET PASSWORD END -->
