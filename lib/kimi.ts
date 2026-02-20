@@ -468,11 +468,20 @@ The walkthrough order is the MOST IMPORTANT aspect of this storyboard. A viewer 
   );
 
   // Parse and validate
+  // Strip markdown code fences if present
+  let jsonContent = content.trim();
+  if (jsonContent.startsWith("```")) {
+    // Remove opening fence (```json or ```)
+    jsonContent = jsonContent.replace(/^```(?:json)?\s*\n?/, "");
+    // Remove closing fence
+    jsonContent = jsonContent.replace(/\n?```\s*$/, "");
+  }
+
   let parsed: unknown;
   try {
-    parsed = JSON.parse(content);
+    parsed = JSON.parse(jsonContent);
   } catch {
-    throw new Error(`Failed to parse AI response as JSON: ${content.substring(0, 200)}`);
+    throw new Error(`Failed to parse AI response as JSON: ${jsonContent.substring(0, 200)}`);
   }
 
   const validated = StoryboardResponseSchema.parse(parsed);
@@ -607,11 +616,20 @@ ${sceneList}`;
     { role: "user", content: userPrompt },
   ]);
 
+  // Strip markdown code fences if present
+  let jsonContent = content.trim();
+  if (jsonContent.startsWith("```")) {
+    // Remove opening fence (```json or ```)
+    jsonContent = jsonContent.replace(/^```(?:json)?\s*\n?/, "");
+    // Remove closing fence
+    jsonContent = jsonContent.replace(/\n?```\s*$/, "");
+  }
+
   let parsed: unknown;
   try {
-    parsed = JSON.parse(content);
+    parsed = JSON.parse(jsonContent);
   } catch {
-    throw new Error(`Failed to parse AI response as JSON: ${content.substring(0, 200)}`);
+    throw new Error(`Failed to parse AI response as JSON: ${jsonContent.substring(0, 200)}`);
   }
 
   const validated = EditPlanSchema.parse(parsed);
