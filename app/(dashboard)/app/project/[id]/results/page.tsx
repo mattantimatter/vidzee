@@ -13,7 +13,7 @@ import {
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { StepNavigation } from "@/components/step-navigation";
 
 const ease = [0.23, 1, 0.32, 1] as const;
@@ -26,9 +26,11 @@ export default function ResultsPage(): ReactNode {
   const [project, setProject] = useState<Project | null>(null);
   const [renders, setRenders] = useState<Render[]>([]);
   const [loading, setLoading] = useState(true);
+  const [triggering, setTriggering] = useState(false);
   const [activeVideo, setActiveVideo] = useState<"vertical" | "horizontal">(
     "vertical"
   );
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(async () => {
     const [projectRes, rendersRes] = await Promise.all([
@@ -49,6 +51,31 @@ export default function ResultsPage(): ReactNode {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  // Poll for render completion when renders are queued/running
+  useEffect(() => {
+    const hasRunning = renders.some(
+      (r) => r.status === "running" || r.status === "queued"
+    );
+
+    if (hasRunning && !pollIntervalRef.current) {
+      console.log("[Results] Starting poll for render completion (every 5s)");
+      pollIntervalRef.current = setInterval(() => {
+        void loadData();
+      }, 5000);
+    } else if (!hasRunning && pollIntervalRef.current) {
+      console.log("[Results] No running renders, stopping poll");
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [renders, loadData]);
 
   useEffect(() => {
     const channel = supabase
@@ -73,14 +100,42 @@ export default function ResultsPage(): ReactNode {
   }, [projectId, supabase, loadData]);
 
   const triggerRender = async () => {
+    setTriggering(true);
     try {
-      await fetch(`/api/projects/${projectId}/edit-plan`, {
+      // Step 1: Generate edit plan and create render rows
+      console.log("[Results] Triggering edit-plan...");
+      const editPlanRes = await fetch(`/api/projects/${projectId}/edit-plan`, {
         method: "POST",
       });
+      const editPlanData = await editPlanRes.json();
+
+      if (!editPlanRes.ok) {
+        alert(`Edit plan error: ${editPlanData.error || "Unknown error"}`);
+        setTriggering(false);
+        return;
+      }
+
+      console.log("[Results] Edit plan created, triggering render...");
+
+      // Step 2: Trigger the actual video assembly
+      const renderRes = await fetch(`/api/projects/${projectId}/render`, {
+        method: "POST",
+      });
+      const renderData = await renderRes.json();
+
+      if (!renderRes.ok) {
+        console.error("[Results] Render error:", renderData);
+        // Don't alert — the render might be processing in the background
+      } else {
+        console.log("[Results] Render response:", renderData);
+      }
+
       await loadData();
     } catch (err) {
       console.error("Render trigger error:", err);
+      alert(`Error: ${err instanceof Error ? err.message : "Failed to start rendering"}`);
     }
+    setTriggering(false);
   };
 
   const getDownloadUrl = (render: Render) => {
@@ -101,9 +156,13 @@ export default function ResultsPage(): ReactNode {
 
   const verticalRender = renders.find((r) => r.type === "final_vertical");
   const horizontalRender = renders.find((r) => r.type === "final_horizontal");
-  const isComplete = project?.status === "complete";
+  const hasDoneRenders =
+    verticalRender?.status === "done" || horizontalRender?.status === "done";
   const isRendering =
-    project?.status === "rendering" || project?.status === "render_queued";
+    project?.status === "rendering" ||
+    project?.status === "render_queued" ||
+    renders.some((r) => r.status === "running" || r.status === "queued");
+  const isComplete = project?.status === "complete" || hasDoneRenders;
 
   const currentRender =
     activeVideo === "vertical" ? verticalRender : horizontalRender;
@@ -126,7 +185,7 @@ export default function ResultsPage(): ReactNode {
             {project?.title ?? "Results"}
           </h1>
           <p className="text-neutral-500 text-sm mb-6">
-            {isComplete
+            {isComplete && hasDoneRenders
               ? "Your videos are ready for download"
               : isRendering
                 ? "Your videos are being rendered..."
@@ -150,16 +209,26 @@ export default function ResultsPage(): ReactNode {
               </p>
               <button
                 onClick={triggerRender}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
+                disabled={triggering}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
               >
-                <Film className="w-4 h-4" />
-                Generate Final Videos
+                {triggering ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Film className="w-4 h-4" />
+                    Generate Final Videos
+                  </>
+                )}
               </button>
             </motion.div>
           )}
 
           {/* Rendering state */}
-          {isRendering && (
+          {isRendering && !hasDoneRenders && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -200,7 +269,7 @@ export default function ResultsPage(): ReactNode {
                         Optimized for Reels, TikTok, and Stories
                       </p>
                     </div>
-                    {verticalRender.output_path && (
+                    {verticalRender.status === "done" && verticalRender.output_path && (
                       <a
                         href={getDownloadUrl(verticalRender) ?? "#"}
                         download
@@ -211,11 +280,14 @@ export default function ResultsPage(): ReactNode {
                         Download
                       </a>
                     )}
-                    {verticalRender.status === "running" && (
+                    {(verticalRender.status === "running" || verticalRender.status === "queued") && (
                       <div className="flex items-center gap-1.5 text-xs text-neutral-400">
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         Rendering...
                       </div>
+                    )}
+                    {verticalRender.status === "failed" && (
+                      <span className="text-xs text-red-500">Failed</span>
                     )}
                   </div>
                 </motion.div>
@@ -243,7 +315,7 @@ export default function ResultsPage(): ReactNode {
                         Optimized for YouTube and MLS
                       </p>
                     </div>
-                    {horizontalRender.output_path && (
+                    {horizontalRender.status === "done" && horizontalRender.output_path && (
                       <a
                         href={getDownloadUrl(horizontalRender) ?? "#"}
                         download
@@ -254,11 +326,14 @@ export default function ResultsPage(): ReactNode {
                         Download
                       </a>
                     )}
-                    {horizontalRender.status === "running" && (
+                    {(horizontalRender.status === "running" || horizontalRender.status === "queued") && (
                       <div className="flex items-center gap-1.5 text-xs text-neutral-400">
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         Rendering...
                       </div>
+                    )}
+                    {horizontalRender.status === "failed" && (
+                      <span className="text-xs text-red-500">Failed</span>
                     )}
                   </div>
                 </motion.div>
@@ -267,11 +342,12 @@ export default function ResultsPage(): ReactNode {
           )}
 
           {/* Regenerate */}
-          {isComplete && (
+          {isComplete && hasDoneRenders && (
             <div className="mt-6 text-center">
               <button
                 onClick={triggerRender}
-                className="inline-flex items-center gap-2 text-xs text-neutral-400 hover:text-neutral-700"
+                disabled={triggering}
+                className="inline-flex items-center gap-2 text-xs text-neutral-400 hover:text-neutral-700 disabled:opacity-50"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Regenerate videos with different settings
@@ -282,7 +358,7 @@ export default function ResultsPage(): ReactNode {
 
         {/* Right Panel — Video Preview */}
         <div className="hidden lg:flex w-[45%] shrink-0 bg-neutral-100 rounded-2xl items-center justify-center overflow-hidden">
-          {currentUrl && currentRender?.output_path ? (
+          {currentUrl && currentRender?.status === "done" && currentRender?.output_path ? (
             <motion.div
               key={activeVideo}
               className="flex flex-col items-center p-4 w-full h-full"

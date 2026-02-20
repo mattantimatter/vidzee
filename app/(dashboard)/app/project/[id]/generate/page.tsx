@@ -196,6 +196,24 @@ export default function GeneratePage(): ReactNode {
     return data.publicUrl;
   };
 
+  /** Get the public URL for a completed scene clip from the scene-clips bucket */
+  const getClipUrl = (render: Render | undefined): string | null => {
+    if (!render || render.status !== "done" || !render.output_path) return null;
+    const { data } = supabase.storage
+      .from("scene-clips")
+      .getPublicUrl(render.output_path);
+    return data.publicUrl;
+  };
+
+  /** Find the render for a given scene */
+  const getRenderForScene = (scene: StoryboardScene): Render | undefined => {
+    return renders.find(
+      (r) =>
+        r.input_refs &&
+        (r.input_refs as Record<string, string>).scene_id === scene.id
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -217,12 +235,9 @@ export default function GeneratePage(): ReactNode {
     ? assets.find((a) => a.id === selectedScene.asset_id)
     : null;
   const selectedRender = selectedScene
-    ? renders.find(
-        (r) =>
-          r.input_refs &&
-          (r.input_refs as Record<string, string>).scene_id === selectedScene.id
-      )
-    : null;
+    ? getRenderForScene(selectedScene)
+    : undefined;
+  const selectedClipUrl = getClipUrl(selectedRender);
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -292,15 +307,12 @@ export default function GeneratePage(): ReactNode {
           {/* Scene Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {scenes.map((scene, i) => {
-              const render = renders.find(
-                (r) =>
-                  r.input_refs &&
-                  (r.input_refs as Record<string, string>).scene_id === scene.id
-              );
+              const render = getRenderForScene(scene);
               const status = render?.status ?? "queued";
               const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.queued!;
               const Icon = config.icon;
               const isSelected = selectedSceneId === scene.id;
+              const clipUrl = getClipUrl(render);
 
               return (
                 <motion.div
@@ -316,17 +328,35 @@ export default function GeneratePage(): ReactNode {
                   }`}
                 >
                   <div className="relative aspect-video bg-neutral-100">
-                    <img
-                      src={getAssetUrl(scene.asset_id)}
-                      alt=""
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                      <Icon
-                        className={`w-5 h-5 ${config.color} ${
-                          status === "running" ? "animate-spin" : ""
-                        }`}
+                    {clipUrl ? (
+                      /* Show video thumbnail for completed clips */
+                      <video
+                        src={clipUrl}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        className="w-full h-full object-cover"
                       />
+                    ) : (
+                      <img
+                        src={getAssetUrl(scene.asset_id)}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                      {clipUrl ? (
+                        /* Play icon overlay for done clips */
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white/80">
+                          <Play className="w-4 h-4 text-green-600 ml-0.5" />
+                        </div>
+                      ) : (
+                        <Icon
+                          className={`w-5 h-5 ${config.color} ${
+                            status === "running" ? "animate-spin" : ""
+                          }`}
+                        />
+                      )}
                     </div>
                   </div>
                   <div className="p-2 md:p-2.5">
@@ -386,22 +416,36 @@ export default function GeneratePage(): ReactNode {
 
         {/* Right Panel — Preview */}
         <div className="hidden lg:flex w-[45%] shrink-0 bg-neutral-100 rounded-2xl items-center justify-center overflow-hidden">
-          {selectedAsset ? (
+          {selectedScene ? (
             <motion.div
               key={selectedSceneId}
-              className="flex flex-col items-center p-4"
+              className="flex flex-col items-center p-4 w-full"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3, ease }}
             >
-              <img
-                src={getAssetUrl(selectedScene?.asset_id ?? null)}
-                alt=""
-                className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg"
-              />
+              {selectedClipUrl ? (
+                /* Show video player when clip is done */
+                <video
+                  key={selectedClipUrl}
+                  src={selectedClipUrl}
+                  controls
+                  autoPlay
+                  muted
+                  playsInline
+                  className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg"
+                />
+              ) : (
+                /* Show source photo when clip is not done */
+                <img
+                  src={getAssetUrl(selectedScene.asset_id)}
+                  alt=""
+                  className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg"
+                />
+              )}
               <div className="mt-4 text-center">
                 <p className="text-sm font-medium text-neutral-700">
-                  {selectedScene?.caption ?? selectedAsset.room_type ?? "Scene Preview"}
+                  {selectedScene.caption ?? selectedAsset?.room_type ?? "Scene Preview"}
                 </p>
                 {selectedRender && (
                   <p className="text-xs text-neutral-400 mt-1">

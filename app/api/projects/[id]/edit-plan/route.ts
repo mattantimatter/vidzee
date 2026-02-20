@@ -1,8 +1,11 @@
 /**
  * POST /api/projects/[id]/edit-plan
  *
- * Generates an edit plan using Kimi K2.5 and creates final render rows.
+ * Generates an edit plan using AI and creates final render rows.
  * This is the last step before video assembly.
+ *
+ * Includes duplicate prevention: won't create new render rows if
+ * queued/running final renders already exist for this project.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -38,6 +41,31 @@ export async function POST(
 
   if (projectError || !project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
+
+  // ─── Duplicate Prevention ──────────────────────────────────────────────
+  // Check if there are already queued or running final renders for this project.
+  // If so, return them instead of creating duplicates.
+  const { data: existingRenders } = await admin
+    .from("renders")
+    .select("*")
+    .eq("project_id", projectId)
+    .in("type", ["final_vertical", "final_horizontal"])
+    .in("status", ["queued", "running"]);
+
+  if (existingRenders && existingRenders.length > 0) {
+    console.log(
+      `[EditPlan] Found ${existingRenders.length} existing queued/running final renders — skipping duplicate creation`
+    );
+    return NextResponse.json({
+      success: true,
+      message: "Existing renders found, skipping duplicate creation",
+      existing_renders: existingRenders.map((r) => ({
+        id: r.id,
+        type: r.type,
+        status: r.status,
+      })),
+    });
   }
 
   // Get completed scene clips
@@ -90,7 +118,7 @@ export async function POST(
         };
       }) ?? [];
 
-    // Generate edit plan via Kimi K2.5
+    // Generate edit plan via AI
     const editPlan = await generateEditPlan({
       scenes: sceneData,
       stylePackId: (project.style_pack_id as string) ?? "modern-clean",
@@ -106,29 +134,32 @@ export async function POST(
       },
     });
 
-    // Create final render rows
-    await admin.from("renders").insert([
-      {
-        project_id: projectId,
-        type: "final_vertical",
-        status: "queued",
-        provider: "ffmpeg",
-        input_refs: {
-          edit_plan: editPlan,
-          aspect_ratio: "9:16",
+    // Create final render rows (only vertical and horizontal)
+    const { data: newRenders } = await admin
+      .from("renders")
+      .insert([
+        {
+          project_id: projectId,
+          type: "final_vertical",
+          status: "queued",
+          provider: "ffmpeg",
+          input_refs: {
+            edit_plan: editPlan,
+            aspect_ratio: "9:16",
+          },
         },
-      },
-      {
-        project_id: projectId,
-        type: "final_horizontal",
-        status: "queued",
-        provider: "ffmpeg",
-        input_refs: {
-          edit_plan: editPlan,
-          aspect_ratio: "16:9",
+        {
+          project_id: projectId,
+          type: "final_horizontal",
+          status: "queued",
+          provider: "ffmpeg",
+          input_refs: {
+            edit_plan: editPlan,
+            aspect_ratio: "16:9",
+          },
         },
-      },
-    ]);
+      ])
+      .select();
 
     // Update project status
     await admin
@@ -143,6 +174,11 @@ export async function POST(
       success: true,
       edit_plan: editPlan,
       total_duration: editPlan.total_duration_sec,
+      renders: newRenders?.map((r) => ({
+        id: r.id,
+        type: r.type,
+        status: r.status,
+      })),
     });
   } catch (err) {
     console.error("Edit plan generation error:", err);
