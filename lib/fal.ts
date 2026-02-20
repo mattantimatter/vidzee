@@ -10,7 +10,10 @@
 // ─── Configuration ──────────────────────────────────────────────────────────
 
 const FAL_QUEUE_BASE = "https://queue.fal.run";
-const FAL_MODEL = "fal-ai/kling-video/o3/standard/image-to-video";
+// Full model path used for job submission
+const FAL_MODEL_SUBMIT = "fal-ai/kling-video/o3/standard/image-to-video";
+// Base model path used for status/result checks (Fal.ai routes these to the root model)
+const FAL_MODEL_BASE = "fal-ai/kling-video";
 
 function getFalApiKey(): string {
   const key = process.env.FAL_API_KEY;
@@ -76,7 +79,7 @@ export async function submitImageToVideo(
     aspect_ratio: params.aspect_ratio ?? "16:9",
   };
 
-  const url = `${FAL_QUEUE_BASE}/${FAL_MODEL}`;
+  const url = `${FAL_QUEUE_BASE}/${FAL_MODEL_SUBMIT}`;
   console.log(`[Fal] POST ${url}`);
 
   const res = await fetch(url, {
@@ -102,7 +105,7 @@ export async function submitImageToVideo(
 export async function checkVideoStatus(
   requestId: string
 ): Promise<FalStatusResponse> {
-  const url = `${FAL_QUEUE_BASE}/${FAL_MODEL}/requests/${requestId}/status`;
+  const url = `${FAL_QUEUE_BASE}/${FAL_MODEL_BASE}/requests/${requestId}/status`;
 
   const res = await fetch(url, {
     method: "GET",
@@ -123,7 +126,7 @@ export async function checkVideoStatus(
 export async function getVideoResult(
   requestId: string
 ): Promise<FalVideoResult> {
-  const url = `${FAL_QUEUE_BASE}/${FAL_MODEL}/requests/${requestId}`;
+  const url = `${FAL_QUEUE_BASE}/${FAL_MODEL_BASE}/requests/${requestId}`;
 
   const res = await fetch(url, {
     method: "GET",
