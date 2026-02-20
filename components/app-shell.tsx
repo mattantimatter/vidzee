@@ -156,20 +156,20 @@ export function AppShell({
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white dark:bg-neutral-900 border-b border-border">
         <div className="flex items-center justify-between px-4 h-14">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/" className="flex items-center gap-2 shrink-0">
             <VidzeeLogo className="w-7 h-7 text-accent" />
             <span className="font-semibold text-neutral-900 dark:text-white">Vidzee</span>
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Link
               href="/app/new"
-              className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent"
+              className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center text-accent min-w-[36px]"
             >
               <Plus className="w-4 h-4" />
             </Link>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-neutral-600 dark:text-neutral-300"
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-neutral-600 dark:text-neutral-300 min-w-[36px]"
             >
               {sidebarOpen ? (
                 <X className="w-5 h-5" />
@@ -237,15 +237,12 @@ export function AppShell({
       </AnimatePresence>
 
       {/* ── Main Content Area ──
-          On desktop, offset left by the collapsed sidebar width (4rem = 64px).
-          The sidebar expands on hover (overlaying content) so we only reserve
-          space for the collapsed width — matching the fixed sidebar.
-          On mobile, offset top by the fixed header height (3.5rem = 56px).
-          h-screen + overflow-y-auto so each page can scroll independently.
+          On desktop (md+), offset left by the collapsed sidebar width (4rem = 64px).
+          On mobile, no left offset — full width with top padding for header.
+          h-screen + overflow-hidden so each page can scroll independently.
       ── */}
       <main
-        className="h-screen pt-14 md:pt-0 overflow-hidden bg-neutral-50/80 dark:bg-background"
-        style={{ marginLeft: `${SIDEBAR_COLLAPSED_W}px` }}
+        className="h-screen pt-14 md:pt-0 md:ml-16 overflow-hidden bg-neutral-50/80 dark:bg-background"
       >
         <div className="h-full flex flex-col min-h-0">
           {children}

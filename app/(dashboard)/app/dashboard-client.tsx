@@ -61,13 +61,13 @@ function ProjectCard({ project }: { project: Project }): ReactNode {
     <Link href={link}>
       <motion.div
         whileHover={{ y: -2 }}
-        className="group relative border border-neutral-200 rounded-2xl p-5 bg-white hover:shadow-md transition-all cursor-pointer"
+        className="group relative border border-neutral-200 rounded-2xl p-4 md:p-5 bg-white hover:shadow-md transition-all cursor-pointer"
       >
         <div className="flex items-start justify-between mb-4">
-          <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
             <Film className="w-5 h-5 text-accent" />
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 shrink-0">
             <span className={`w-2 h-2 rounded-full ${status.color}`} />
             <span className="text-xs text-neutral-500 font-medium">
               {status.label}
@@ -101,9 +101,10 @@ export function DashboardClient({
 }): ReactNode {
   return (
     <div className="overflow-y-auto p-4 md:p-6 lg:p-8 max-w-6xl mx-auto h-full">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+      {/* Header — stacked on mobile to prevent overlap */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="min-w-0">
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-neutral-900">
             Projects
           </h1>
           <p className="text-neutral-500 text-sm mt-1">
@@ -112,7 +113,7 @@ export function DashboardClient({
         </div>
         <Link
           href="/app/new"
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors min-h-[44px] shrink-0 self-start sm:self-auto"
         >
           <Plus className="w-4 h-4" />
           New Project
@@ -124,18 +125,18 @@ export function DashboardClient({
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease }}
-          className="text-center py-20 border border-dashed border-neutral-200 rounded-2xl bg-white"
+          className="text-center py-16 md:py-20 border border-dashed border-neutral-200 rounded-2xl bg-white"
         >
           <Film className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
           <h2 className="text-base font-semibold text-neutral-700 mb-1">
             No projects yet
           </h2>
-          <p className="text-neutral-400 text-sm mb-5">
+          <p className="text-neutral-400 text-sm mb-5 px-4">
             Create your first listing video project to get started.
           </p>
           <Link
             href="/app/new"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors min-h-[44px]"
           >
             <Plus className="w-4 h-4" />
             Create Your First Video
@@ -146,7 +147,7 @@ export function DashboardClient({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.4, ease }}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4"
         >
           {projects.map((project, i) => (
             <motion.div

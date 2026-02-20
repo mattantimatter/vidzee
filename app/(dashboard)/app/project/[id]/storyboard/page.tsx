@@ -441,14 +441,14 @@ export default function StoryboardPage(): ReactNode {
     : null;
 
   return (
-    <div className="flex gap-6 h-full min-h-0 p-4 md:p-6 lg:p-8">
+    <div className="flex flex-col lg:flex-row gap-4 md:gap-6 h-full min-h-0 p-4 md:p-6 lg:p-8">
       {/* Left Panel — Controls & Scene List (independently scrollable) */}
       <div
-        className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain pr-2"
+        className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain lg:pr-2"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
         <div className="mb-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
             Storyboard
           </h1>
           <p className="text-neutral-500 text-sm mt-1">
@@ -534,7 +534,7 @@ export default function StoryboardPage(): ReactNode {
         </div>
 
         {/* Generate Button */}
-        <div className="mb-6 flex items-center gap-3">
+        <div className="mb-6 flex flex-wrap items-center gap-3">
           <button
             onClick={generateStoryboard}
             disabled={generating || assets.length === 0}
@@ -611,7 +611,7 @@ export default function StoryboardPage(): ReactNode {
           <div className="pb-6">
             <button
               onClick={handleContinue}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors min-h-[44px]"
             >
               Continue to Generate Clips
               <ArrowRight className="w-4 h-4" />

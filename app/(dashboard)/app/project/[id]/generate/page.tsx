@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 const ease = [0.23, 1, 0.32, 1] as const;
 
@@ -39,6 +39,7 @@ export default function GeneratePage(): ReactNode {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(async () => {
     const [scenesRes, assetsRes, rendersRes] = await Promise.all([
@@ -61,12 +62,73 @@ export default function GeneratePage(): ReactNode {
     if (assetsRes.data) setAssets(assetsRes.data as Asset[]);
     if (rendersRes.data) setRenders(rendersRes.data as Render[]);
     setLoading(false);
+
+    return rendersRes.data as Render[] | null;
   }, [projectId, supabase]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
 
+  // ─── Active Polling for Fal.ai status ───────────────────────────────
+  // The poll endpoint checks Fal.ai for completed videos and updates the DB.
+  // We poll every 10 seconds while there are running/queued renders.
+  const pollForUpdates = useCallback(async () => {
+    try {
+      console.log("[Generate] Polling for clip updates...");
+      const res = await fetch(`/api/projects/${projectId}/clips/poll`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        console.log("[Generate] Poll result:", data);
+        // Reload data from DB to get updated statuses
+        await loadData();
+        // If all done, stop polling
+        if (data.allDone) {
+          console.log("[Generate] All renders done, stopping poll");
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
+          }
+        }
+      } else {
+        console.error("[Generate] Poll request failed:", res.status);
+      }
+    } catch (err) {
+      console.error("[Generate] Poll error:", err);
+    }
+  }, [projectId, loadData]);
+
+  // Start/stop polling based on render statuses
+  useEffect(() => {
+    const hasRunning = renders.some(
+      (r) => r.status === "running" || r.status === "queued"
+    );
+
+    if (hasRunning && !pollIntervalRef.current) {
+      console.log("[Generate] Starting poll interval (every 10s)");
+      // Do an immediate poll
+      void pollForUpdates();
+      // Then poll every 10 seconds
+      pollIntervalRef.current = setInterval(() => {
+        void pollForUpdates();
+      }, 10000);
+    } else if (!hasRunning && pollIntervalRef.current) {
+      console.log("[Generate] No running renders, stopping poll interval");
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [renders, pollForUpdates]);
+
+  // Also keep the Supabase Realtime subscription as a backup
   useEffect(() => {
     const channel = supabase
       .channel(`renders-${projectId}`)
@@ -104,6 +166,7 @@ export default function GeneratePage(): ReactNode {
         if (data.errors && data.errors.length > 0) {
           alert(`Some clips had issues:\n${data.errors.join("\n")}\n\n${data.submitted} clips submitted successfully.`);
         }
+        // Reload data — this will trigger the polling useEffect
         await loadData();
       }
     } catch (err) {
@@ -114,6 +177,7 @@ export default function GeneratePage(): ReactNode {
   };
 
   const retryScene = async (renderId: string) => {
+    // Reset the render to queued, then re-submit via the clips endpoint
     await supabase
       .from("renders")
       .update({ status: "queued", error: null })
@@ -143,6 +207,9 @@ export default function GeneratePage(): ReactNode {
   const totalCount = scenes.length;
   const allDone = doneCount === totalCount && totalCount > 0;
   const progress = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
+  const hasRunning = renders.some(
+    (r) => r.status === "running" || r.status === "queued"
+  );
 
   const selectedScene = scenes.find((s) => s.id === selectedSceneId);
   const selectedAsset = selectedScene
@@ -157,15 +224,15 @@ export default function GeneratePage(): ReactNode {
     : null;
 
   return (
-    <div className="flex gap-6 h-full min-h-0 p-4 md:p-6 lg:p-8">
+    <div className="flex flex-col lg:flex-row gap-4 md:gap-6 h-full min-h-0 p-4 md:p-6 lg:p-8">
       {/* Left Panel */}
       <div
         className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain"
         style={{ WebkitOverflowScrolling: "touch" }}
       >
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-neutral-900">
               Generate Clips
             </h1>
             <p className="text-neutral-500 text-sm mt-1">
@@ -176,7 +243,7 @@ export default function GeneratePage(): ReactNode {
             <button
               onClick={startGeneration}
               disabled={generating || scenes.length === 0}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 min-h-[44px] shrink-0"
             >
               {generating ? (
                 <>
@@ -197,7 +264,14 @@ export default function GeneratePage(): ReactNode {
         {renders.length > 0 && (
           <div className="mb-6">
             <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-neutral-500">Overall Progress</span>
+              <span className="text-neutral-500">
+                Overall Progress
+                {hasRunning && (
+                  <span className="ml-2 text-orange-500 animate-pulse">
+                    Polling Fal.ai...
+                  </span>
+                )}
+              </span>
               <span className="font-semibold text-neutral-700">
                 {Math.round(progress)}%
               </span>
@@ -214,7 +288,7 @@ export default function GeneratePage(): ReactNode {
         )}
 
         {/* Scene Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-3">
           {scenes.map((scene, i) => {
             const render = renders.find(
               (r) =>
@@ -253,7 +327,7 @@ export default function GeneratePage(): ReactNode {
                     />
                   </div>
                 </div>
-                <div className="p-2.5">
+                <div className="p-2 md:p-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-medium text-neutral-700">
                       Scene {i + 1}
@@ -273,7 +347,7 @@ export default function GeneratePage(): ReactNode {
                         e.stopPropagation();
                         retryScene(render.id);
                       }}
-                      className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent hover:underline"
+                      className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent hover:underline min-h-[44px] sm:min-h-0"
                     >
                       <RefreshCw className="w-3 h-3" />
                       Retry
@@ -299,7 +373,7 @@ export default function GeneratePage(): ReactNode {
               onClick={() =>
                 router.push(`/app/project/${projectId}/details`)
               }
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 transition-colors"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 transition-colors min-h-[44px]"
             >
               Continue to Listing Details
               <ArrowRight className="w-4 h-4" />
