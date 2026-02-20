@@ -1,25 +1,24 @@
 /**
  * POST /api/projects/[id]/clips
  *
- * Triggers Kling AI video generation for each included storyboard scene.
- * Creates render rows and submits jobs to Kling.
+ * Triggers Fal.ai (Kling Video) generation for each included storyboard scene.
+ * Creates render rows and submits jobs to Fal.ai queue API.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { createImageToVideoTask } from "@/lib/kling";
+import { submitImageToVideo } from "@/lib/fal";
 import { getMotionPrompt } from "@/lib/style-packs";
 import { NextResponse } from "next/server";
 
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: projectId } = await params;
 
   console.log(`[Clips] ===== START clip generation for project ${projectId} =====`);
-  console.log(`[Clips] ENV check: KLING_ACCESS_KEY exists = ${!!process.env.KLING_ACCESS_KEY}, KLING_SECRET_KEY exists = ${!!process.env.KLING_SECRET_KEY}`);
-  console.log(`[Clips] ENV check: KLING_ACCESS_KEY length = ${process.env.KLING_ACCESS_KEY?.length ?? 0}, KLING_SECRET_KEY length = ${process.env.KLING_SECRET_KEY?.length ?? 0}`);
+  console.log(`[Clips] ENV check: FAL_API_KEY exists = ${!!process.env.FAL_API_KEY}`);
 
   // Verify user auth
   let supabase;
@@ -54,6 +53,17 @@ export async function POST(
     return NextResponse.json({ error: "Failed to create admin client" }, { status: 500 });
   }
 
+  // Parse request body for aspect_ratio
+  let aspectRatio: "16:9" | "9:16" = "16:9";
+  try {
+    const body = await request.json().catch(() => ({}));
+    if (body && typeof body === "object" && "aspect_ratio" in body) {
+      aspectRatio = body.aspect_ratio === "9:16" ? "9:16" : "16:9";
+    }
+  } catch {
+    // Default to 16:9
+  }
+
   // Verify project ownership
   let project;
   try {
@@ -70,6 +80,12 @@ export async function POST(
     }
     project = data;
     console.log(`[Clips] Project found: ${project.title}`);
+
+    // Use project video_format if available (column may not exist yet, defaults to 16:9)
+    const projectFormat = (project as Record<string, unknown>).video_format as string | null | undefined;
+    if (projectFormat) {
+      aspectRatio = projectFormat === "9:16" ? "9:16" : "16:9";
+    }
   } catch (err) {
     console.error("[Clips] FATAL: Project query failed:", err);
     return NextResponse.json({ error: "Project query failed" }, { status: 500 });
@@ -152,12 +168,12 @@ export async function POST(
     const renderResults: Array<{
       scene_id: string;
       render_id: string;
-      task_id: string;
+      request_id: string;
     }> = [];
 
     const errors: string[] = [];
 
-    // Submit each scene to Kling AI
+    // Submit each scene to Fal.ai
     for (const scene of scenes) {
       const assetId = scene.asset_id as string;
       const asset = assetMap.get(assetId);
@@ -167,8 +183,7 @@ export async function POST(
         continue;
       }
 
-      // Always create a signed URL — skip the HEAD check entirely.
-      // Signed URLs are more reliable for external API consumption (Kling).
+      // Create a signed URL for the image
       let imageUrl: string;
       try {
         const { data: signedData, error: signedError } = await admin.storage
@@ -188,43 +203,40 @@ export async function POST(
         continue;
       }
 
-      console.log(`[Clips] Submitting scene ${scene.id} to Kling, image: ${imageUrl.substring(0, 80)}...`);
+      console.log(`[Clips] Submitting scene ${scene.id} to Fal.ai, image: ${imageUrl.substring(0, 80)}...`);
 
       const motionPrompt = getMotionPrompt(
         (scene.motion_template as string) ?? "push_in"
       );
 
       try {
-        // Submit to Kling AI
-        console.log(`[Clips] Calling createImageToVideoTask for scene ${scene.id}...`);
-        const klingResponse = await createImageToVideoTask({
-          model_name: "kling-v2-6",
-          image: imageUrl,
+        // Submit to Fal.ai
+        console.log(`[Clips] Calling submitImageToVideo for scene ${scene.id}...`);
+        const falResponse = await submitImageToVideo({
+          image_url: imageUrl,
           prompt: motionPrompt,
-          negative_prompt:
-            "blurry, distorted, low quality, watermark, text overlay",
-          duration: "5",
-          mode: "std",
+          duration: "3",
+          aspect_ratio: aspectRatio,
         });
 
-        console.log(`[Clips] Kling response for scene ${scene.id}:`, JSON.stringify(klingResponse).substring(0, 300));
+        console.log(`[Clips] Fal response for scene ${scene.id}: request_id=${falResponse.request_id}`);
 
-        if (!klingResponse?.data?.task_id) {
-          console.error(`[Clips] Kling returned no task_id for scene ${scene.id}:`, JSON.stringify(klingResponse));
-          errors.push(`Scene ${scene.id}: Kling API returned no task_id`);
+        if (!falResponse?.request_id) {
+          console.error(`[Clips] Fal returned no request_id for scene ${scene.id}:`, JSON.stringify(falResponse));
+          errors.push(`Scene ${scene.id}: Fal.ai API returned no request_id`);
           continue;
         }
 
         // Create render row
-        console.log(`[Clips] Creating render row for scene ${scene.id}, task_id=${klingResponse.data.task_id}`);
+        console.log(`[Clips] Creating render row for scene ${scene.id}, request_id=${falResponse.request_id}`);
         const { data: render, error: renderError } = await admin
           .from("renders")
           .insert({
             project_id: projectId,
             type: "scene_clip",
             status: "running",
-            provider: "kling",
-            provider_job_id: klingResponse.data.task_id,
+            provider: "fal",
+            provider_job_id: falResponse.request_id,
             input_refs: {
               scene_id: scene.id as string,
               asset_id: assetId,
@@ -245,11 +257,11 @@ export async function POST(
         renderResults.push({
           scene_id: scene.id as string,
           render_id: render.id as string,
-          task_id: klingResponse.data.task_id,
+          request_id: falResponse.request_id,
         });
-      } catch (klingErr) {
-        const msg = klingErr instanceof Error ? klingErr.message : String(klingErr);
-        console.error(`[Clips] Kling API error for scene ${scene.id}:`, msg, klingErr);
+      } catch (falErr) {
+        const msg = falErr instanceof Error ? falErr.message : String(falErr);
+        console.error(`[Clips] Fal.ai API error for scene ${scene.id}:`, msg, falErr);
         errors.push(`Scene ${scene.id}: ${msg}`);
       }
     }

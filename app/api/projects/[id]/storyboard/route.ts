@@ -35,8 +35,9 @@ export async function POST(
     cut_length?: CutLength;
   };
   const stylePackId = body.style_pack_id ?? "modern-clean";
-  const cutLength: CutLength = body.cut_length ?? "medium";
-  const sceneRange = CUT_LENGTH_RANGES[cutLength] ?? CUT_LENGTH_RANGES.medium;
+  // cut_length is auto-calculated from photo count (see below after fetching assets)
+  // If explicitly provided, use it; otherwise auto-calculate
+  const explicitCutLength: CutLength | undefined = body.cut_length;
 
   const admin = createAdminClient();
 
@@ -68,7 +69,17 @@ export async function POST(
     );
   }
 
-  console.log(`[Storyboard] Starting generation for project ${projectId}, ${assets.length} assets`);
+  // Auto-calculate cut_length from photo count if not explicitly provided
+  // 10-14 photos → short, 15-20 → medium, 21-30 → long
+  function autoCutLength(photoCount: number): CutLength {
+    if (photoCount <= 14) return "short";
+    if (photoCount <= 20) return "medium";
+    return "long";
+  }
+  const cutLength: CutLength = explicitCutLength ?? autoCutLength(assets.length);
+  const sceneRange = CUT_LENGTH_RANGES[cutLength] ?? CUT_LENGTH_RANGES.medium;
+
+  console.log(`[Storyboard] Starting generation for project ${projectId}, ${assets.length} assets, cut_length=${cutLength} (${explicitCutLength ? "explicit" : "auto"})`);
 
   try {
     // Update project status

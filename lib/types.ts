@@ -52,6 +52,7 @@ export interface Project {
   logo_path: string | null;
   style_pack_id: string;
   cut_length: CutLength;
+  video_format?: string | null;
   status: ProjectStatus;
   created_at: string;
   updated_at: string;

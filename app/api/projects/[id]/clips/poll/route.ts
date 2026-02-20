@@ -1,13 +1,13 @@
 /**
  * POST /api/projects/[id]/clips/poll
  *
- * Polls Kling AI for the status of all running clip renders.
+ * Polls Fal.ai for the status of all running clip renders.
  * Updates render rows and downloads completed videos to Supabase Storage.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { queryImageToVideoTask, downloadKlingVideo } from "@/lib/kling";
+import { checkVideoStatus, getVideoResult, downloadFalVideo } from "@/lib/fal";
 import { NextResponse } from "next/server";
 
 export async function POST(
@@ -51,18 +51,21 @@ export async function POST(
   let failedCount = 0;
 
   for (const render of renders) {
-    const taskId = render.provider_job_id as string;
-    if (!taskId) continue;
+    const requestId = render.provider_job_id as string;
+    if (!requestId) continue;
 
     try {
-      const result = await queryImageToVideoTask(taskId);
+      // Check status via Fal.ai
+      const statusResult = await checkVideoStatus(requestId);
 
-      if (result.data.task_status === "succeed") {
-        const videoUrl = result.data.task_result?.videos?.[0]?.url;
+      if (statusResult.status === "COMPLETED") {
+        // Get the result with video URL
+        const result = await getVideoResult(requestId);
+        const videoUrl = result.video?.url;
 
         if (videoUrl) {
-          // Download and upload to Supabase Storage
-          const videoBuffer = await downloadKlingVideo(videoUrl);
+          // Download video from Fal CDN (no auth needed)
+          const videoBuffer = await downloadFalVideo(videoUrl);
           const storagePath = `${projectId}/${render.id}.mp4`;
 
           const { error: uploadError } = await admin.storage
@@ -81,30 +84,47 @@ export async function POST(
             .update({
               status: "done",
               output_path: storagePath,
-              duration_sec: parseFloat(
-                result.data.task_result?.videos?.[0]?.duration ?? "5"
-              ),
+              duration_sec: 3, // Default 3s for Fal.ai Kling
               updated_at: new Date().toISOString(),
             })
             .eq("id", render.id);
 
           completedCount++;
         }
-      } else if (result.data.task_status === "failed") {
+      } else if (
+        statusResult.status === "IN_QUEUE" ||
+        statusResult.status === "IN_PROGRESS"
+      ) {
+        // Still running — leave as-is
+      } else {
+        // Unknown status — treat as failed
         await admin
           .from("renders")
           .update({
             status: "failed",
-            error: result.data.task_status_msg ?? "Unknown error",
+            error: `Unexpected status: ${statusResult.status}`,
             updated_at: new Date().toISOString(),
           })
           .eq("id", render.id);
 
         failedCount++;
       }
-      // If still processing, leave as-is
     } catch (err) {
-      console.error(`Error polling render ${render.id}:`, err);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error(`Error polling render ${render.id}:`, errMsg);
+
+      // If the error indicates a permanent failure, mark as failed
+      if (errMsg.includes("404") || errMsg.includes("not found")) {
+        await admin
+          .from("renders")
+          .update({
+            status: "failed",
+            error: errMsg,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", render.id);
+        failedCount++;
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import type { Asset, CutLength, Project, StoryboardScene } from "@/lib/types";
+import type { Asset, Project, StoryboardScene } from "@/lib/types";
 import {
   DndContext,
   closestCenter,
@@ -25,9 +25,11 @@ import {
   EyeOff,
   GripVertical,
   Loader2,
+  Monitor,
   Play,
   RefreshCw,
   RotateCcw,
+  Smartphone,
   Sparkles,
 } from "lucide-react";
 import { motion } from "motion/react";
@@ -40,12 +42,6 @@ const STYLE_PACKS = [
   { id: "modern-clean", name: "Modern Clean", description: "Minimal, elegant transitions" },
   { id: "luxury-classic", name: "Luxury Classic", description: "Rich, cinematic feel" },
   { id: "bold-dynamic", name: "Bold Dynamic", description: "Energetic, fast-paced" },
-];
-
-const CUT_LENGTHS: { value: CutLength; label: string; scenes: string }[] = [
-  { value: "short", label: "Short", scenes: "10–14 scenes (30–45s)" },
-  { value: "medium", label: "Medium", scenes: "15–20 scenes (45–60s)" },
-  { value: "long", label: "Long", scenes: "21–30 scenes (60–90s)" },
 ];
 
 /** Human-friendly room type display names */
@@ -102,10 +98,8 @@ function getDisplayRoomName(roomType: string | null): string {
   if (!roomType) return "Unknown";
   const key = roomType.toLowerCase().trim();
   if (ROOM_DISPLAY_NAMES[key]) return ROOM_DISPLAY_NAMES[key];
-  // Try replacing underscores with spaces
   const spaced = key.replace(/_/g, " ");
   if (ROOM_DISPLAY_NAMES[spaced]) return ROOM_DISPLAY_NAMES[spaced];
-  // Fallback: title case the original
   return roomType
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -154,16 +148,21 @@ const ROOM_BADGE_COLORS: Record<string, string> = {
 function getRoomBadgeColor(roomType: string | null): string {
   if (!roomType) return "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400";
   const key = roomType.toLowerCase().trim();
-  // Try exact match
   if (ROOM_BADGE_COLORS[key]) return ROOM_BADGE_COLORS[key];
-  // Try with underscores replaced
   const underscored = key.replace(/\s+/g, "_");
   if (ROOM_BADGE_COLORS[underscored]) return ROOM_BADGE_COLORS[underscored];
-  // Partial match
   for (const [k, v] of Object.entries(ROOM_BADGE_COLORS)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
   return "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400";
+}
+
+/* ─── Auto cut-length from photo count ──────────────────────────────────── */
+
+function autoCutLength(photoCount: number): "short" | "medium" | "long" {
+  if (photoCount <= 14) return "short";
+  if (photoCount <= 20) return "medium";
+  return "long";
 }
 
 /* ─── Sortable Scene Row ─────────────────────────────────────────────── */
@@ -285,7 +284,7 @@ export default function StoryboardPage(): ReactNode {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [stylePack, setStylePack] = useState("modern-clean");
-  const [cutLength, setCutLength] = useState<CutLength>("medium");
+  const [videoFormat, setVideoFormat] = useState<"16:9" | "9:16">("16:9");
   const [selectedScene, setSelectedScene] = useState<StoryboardScene | null>(null);
 
   // Store the original AI-recommended order for reset
@@ -311,7 +310,9 @@ export default function StoryboardPage(): ReactNode {
     if (projectRes.data) {
       setProject(projectRes.data as Project);
       setStylePack(projectRes.data.style_pack_id ?? "modern-clean");
-      setCutLength((projectRes.data.cut_length as CutLength) ?? "medium");
+      // Load video format (may not exist in DB yet, default to 16:9)
+      const fmt = (projectRes.data as Record<string, unknown>).video_format as string | null | undefined;
+      setVideoFormat(fmt === "9:16" ? "9:16" : "16:9");
     }
     if (assetsRes.data) setAssets(assetsRes.data as Asset[]);
     if (scenesRes.data) {
@@ -326,6 +327,9 @@ export default function StoryboardPage(): ReactNode {
     void loadData();
   }, [loadData]);
 
+  // Auto-determine cut length from photo count
+  const cutLength = autoCutLength(assets.length);
+
   const generateStoryboard = async () => {
     setGenerating(true);
     try {
@@ -336,6 +340,10 @@ export default function StoryboardPage(): ReactNode {
       });
       if (res.ok) {
         await loadData();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        console.error("Storyboard generation failed:", data);
+        alert(`Storyboard generation failed: ${(data as Record<string, unknown>).error ?? "Unknown error"}`);
       }
     } catch (err) {
       console.error("Storyboard generation error:", err);
@@ -361,7 +369,6 @@ export default function StoryboardPage(): ReactNode {
     const reordered = arrayMove(scenes, oldIndex, newIndex);
     setScenes(reordered);
 
-    // Persist new order to database
     const updates = reordered.map((scene, i) => ({
       id: scene.id,
       scene_order: i + 1,
@@ -380,7 +387,6 @@ export default function StoryboardPage(): ReactNode {
     const original = [...originalOrderRef.current];
     setScenes(original);
 
-    // Persist reset order to database
     for (let i = 0; i < original.length; i++) {
       const scene = original[i];
       if (!scene) continue;
@@ -392,10 +398,22 @@ export default function StoryboardPage(): ReactNode {
   };
 
   const handleContinue = async () => {
+    // Save style pack and video format (video_format column may not exist yet — ignore error)
     await supabase
       .from("projects")
       .update({ style_pack_id: stylePack, cut_length: cutLength, status: "storyboard_ready" })
       .eq("id", projectId);
+
+    // Try to save video_format — ignore if column doesn't exist
+    try {
+      await supabase
+        .from("projects")
+        .update({ video_format: videoFormat } as Record<string, unknown>)
+        .eq("id", projectId);
+    } catch {
+      // Column may not exist yet
+    }
+
     router.push(`/app/project/${projectId}/generate`);
   };
 
@@ -465,36 +483,53 @@ export default function StoryboardPage(): ReactNode {
             </div>
           </div>
 
-          {/* Cut Length */}
+          {/* Video Format & Duration Info */}
           <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5">
             <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3">
-              Video Length
+              Video Format
             </h3>
-            <div className="space-y-2">
-              {CUT_LENGTHS.map((cut) => (
-                <button
-                  key={cut.value}
-                  onClick={() => setCutLength(cut.value)}
-                  className={`w-full text-left px-4 py-2.5 rounded-xl border transition-colors text-sm ${
-                    cutLength === cut.value
-                      ? "border-accent bg-accent/5 text-accent"
-                      : "border-neutral-200 dark:border-neutral-600 hover:border-accent/30 text-neutral-700 dark:text-neutral-300"
-                  }`}
-                >
-                  <span className="font-medium">{cut.label}</span>
-                  <span className="block text-xs text-neutral-400 mt-0.5">
-                    {cut.scenes}
-                  </span>
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                onClick={() => setVideoFormat("16:9")}
+                className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border transition-colors text-sm ${
+                  videoFormat === "16:9"
+                    ? "border-accent bg-accent/5 text-accent"
+                    : "border-neutral-200 dark:border-neutral-600 hover:border-accent/30 text-neutral-700 dark:text-neutral-300"
+                }`}
+              >
+                <Monitor className="w-5 h-5" />
+                <span className="font-medium text-xs">Landscape</span>
+                <span className="text-[10px] text-neutral-400">16:9 · YouTube / MLS</span>
+              </button>
+              <button
+                onClick={() => setVideoFormat("9:16")}
+                className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border transition-colors text-sm ${
+                  videoFormat === "9:16"
+                    ? "border-accent bg-accent/5 text-accent"
+                    : "border-neutral-200 dark:border-neutral-600 hover:border-accent/30 text-neutral-700 dark:text-neutral-300"
+                }`}
+              >
+                <Smartphone className="w-5 h-5" />
+                <span className="font-medium text-xs">Portrait</span>
+                <span className="text-[10px] text-neutral-400">9:16 · Reels / TikTok</span>
+              </button>
             </div>
-            {scenes.length > 0 && (
-              <div className="mt-3 p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-700 text-xs text-neutral-600 dark:text-neutral-300">
-                <span className="font-semibold">{includedCount}</span> scenes
-                included — est.{" "}
-                <span className="font-semibold">{estimatedDuration}s</span>
+
+            {/* Auto-calculated duration info */}
+            <div className="p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-700 text-xs text-neutral-600 dark:text-neutral-300">
+              <div className="flex items-center justify-between">
+                <span>
+                  <span className="font-semibold">{assets.length}</span> photos →{" "}
+                  <span className="font-semibold capitalize">{cutLength}</span> cut
+                </span>
+                {scenes.length > 0 && (
+                  <span>
+                    <span className="font-semibold">{includedCount}</span> scenes ·{" "}
+                    <span className="font-semibold">~{estimatedDuration}s</span>
+                  </span>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
