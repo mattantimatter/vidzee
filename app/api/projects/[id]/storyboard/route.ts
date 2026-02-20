@@ -13,6 +13,9 @@ import { generateStoryboard } from "@/lib/kimi";
 import { CUT_LENGTH_RANGES, type CutLength } from "@/lib/types";
 import { NextResponse } from "next/server";
 
+// Allow up to 60 seconds for AI storyboard generation
+export const maxDuration = 60;
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

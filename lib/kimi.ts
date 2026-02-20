@@ -149,6 +149,7 @@ interface ChatCompletionResponse {
     message: {
       content: string;
     };
+    finish_reason?: string;
   }>;
 }
 
@@ -181,8 +182,12 @@ async function callVisionAI(
 
   const data = (await res.json()) as ChatCompletionResponse;
   const content = data.choices?.[0]?.message?.content;
+  const finishReason = data.choices?.[0]?.finish_reason;
   if (!content) {
     throw new Error(`Empty response from AI API (${model})`);
+  }
+  if (finishReason && finishReason !== "stop") {
+    console.warn(`[AI] Response finish_reason: ${finishReason} (model: ${model}, content length: ${content.length})`);
   }
   return content;
 }
@@ -477,10 +482,21 @@ The walkthrough order is the MOST IMPORTANT aspect of this storyboard. A viewer 
     jsonContent = jsonContent.replace(/\n?```\s*$/, "");
   }
 
+  // If content doesn't start with { or [, try to extract JSON from it
+  if (!jsonContent.startsWith("{") && !jsonContent.startsWith("[")) {
+    const jsonMatch = jsonContent.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      jsonContent = jsonMatch[0];
+    }
+  }
+
+  console.log(`[AI] Response length: ${content.length}, stripped length: ${jsonContent.length}`);
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(jsonContent);
-  } catch {
+  } catch (parseErr) {
+    console.error(`[AI] JSON parse failed. Content length: ${jsonContent.length}, first 500 chars: ${jsonContent.substring(0, 500)}, last 200 chars: ${jsonContent.substring(jsonContent.length - 200)}`);
     throw new Error(`Failed to parse AI response as JSON: ${jsonContent.substring(0, 200)}`);
   }
 
