@@ -171,6 +171,7 @@ async function callVisionAI(
       model,
       messages,
       temperature: 0.3,
+      max_tokens: 16384,
       response_format: { type: "json_object" },
     }),
   });
@@ -230,6 +231,7 @@ async function callKimi(messages: ChatMessage[]): Promise<string> {
       model: KIMI_MODEL,
       messages: textMessages,
       temperature: 0.3,
+      max_tokens: 16384,
       response_format: { type: "json_object" },
     }),
   });
