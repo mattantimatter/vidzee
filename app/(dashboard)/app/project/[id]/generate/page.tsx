@@ -9,9 +9,10 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  X,
   XCircle,
 } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { StepNavigation } from "@/components/step-navigation";
@@ -72,8 +73,6 @@ export default function GeneratePage(): ReactNode {
   }, [loadData]);
 
   // ─── Active Polling for Fal.ai status ───────────────────────────────
-  // The poll endpoint checks Fal.ai for completed videos and updates the DB.
-  // We poll every 10 seconds while there are running/queued renders.
   const pollForUpdates = useCallback(async () => {
     try {
       console.log("[Generate] Polling for clip updates...");
@@ -83,9 +82,7 @@ export default function GeneratePage(): ReactNode {
       if (res.ok) {
         const data = await res.json();
         console.log("[Generate] Poll result:", data);
-        // Reload data from DB to get updated statuses
         await loadData();
-        // If all done, stop polling
         if (data.allDone) {
           console.log("[Generate] All renders done, stopping poll");
           if (pollIntervalRef.current) {
@@ -109,9 +106,7 @@ export default function GeneratePage(): ReactNode {
 
     if (hasRunning && !pollIntervalRef.current) {
       console.log("[Generate] Starting poll interval (every 10s)");
-      // Do an immediate poll
       void pollForUpdates();
-      // Then poll every 10 seconds
       pollIntervalRef.current = setInterval(() => {
         void pollForUpdates();
       }, 10000);
@@ -129,7 +124,7 @@ export default function GeneratePage(): ReactNode {
     };
   }, [renders, pollForUpdates]);
 
-  // Also keep the Supabase Realtime subscription as a backup
+  // Supabase Realtime subscription as backup
   useEffect(() => {
     const channel = supabase
       .channel(`renders-${projectId}`)
@@ -167,7 +162,6 @@ export default function GeneratePage(): ReactNode {
         if (data.errors && data.errors.length > 0) {
           alert(`Some clips had issues:\n${data.errors.join("\n")}\n\n${data.submitted} clips submitted successfully.`);
         }
-        // Reload data — this will trigger the polling useEffect
         await loadData();
       }
     } catch (err) {
@@ -178,7 +172,6 @@ export default function GeneratePage(): ReactNode {
   };
 
   const retryScene = async (renderId: string) => {
-    // Reset the render to queued, then re-submit via the clips endpoint
     await supabase
       .from("renders")
       .update({ status: "queued", error: null })
@@ -212,6 +205,11 @@ export default function GeneratePage(): ReactNode {
         r.input_refs &&
         (r.input_refs as Record<string, string>).scene_id === scene.id
     );
+  };
+
+  /** Handle scene tap — toggle selection */
+  const handleSceneTap = (sceneId: string) => {
+    setSelectedSceneId((prev) => (prev === sceneId ? null : sceneId));
   };
 
   if (loading) {
@@ -315,78 +313,139 @@ export default function GeneratePage(): ReactNode {
               const clipUrl = getClipUrl(render);
 
               return (
-                <motion.div
-                  key={scene.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.03, ease }}
-                  onClick={() => setSelectedSceneId(scene.id)}
-                  className={`border rounded-xl overflow-hidden bg-white cursor-pointer transition-all ${
-                    isSelected
-                      ? "border-accent ring-1 ring-accent/30"
-                      : "border-neutral-200 hover:border-accent/30"
-                  }`}
-                >
-                  <div className="relative aspect-video bg-neutral-100">
-                    {clipUrl ? (
-                      /* Show video thumbnail for completed clips */
-                      <video
-                        src={clipUrl}
-                        muted
-                        playsInline
-                        preload="metadata"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <img
-                        src={getAssetUrl(scene.asset_id)}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                <div key={scene.id}>
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.03, ease }}
+                    onClick={() => handleSceneTap(scene.id)}
+                    className={`border rounded-xl overflow-hidden bg-white cursor-pointer transition-all ${
+                      isSelected
+                        ? "border-accent ring-1 ring-accent/30"
+                        : "border-neutral-200 hover:border-accent/30"
+                    }`}
+                  >
+                    <div className="relative aspect-video bg-neutral-100">
                       {clipUrl ? (
-                        /* Play icon overlay for done clips */
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white/80">
-                          <Play className="w-4 h-4 text-green-600 ml-0.5" />
-                        </div>
+                        /* Show video thumbnail for completed clips */
+                        <video
+                          src={clipUrl}
+                          muted
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover"
+                        />
                       ) : (
-                        <Icon
-                          className={`w-5 h-5 ${config.color} ${
-                            status === "running" ? "animate-spin" : ""
-                          }`}
+                        <img
+                          src={getAssetUrl(scene.asset_id)}
+                          alt=""
+                          className="w-full h-full object-cover"
                         />
                       )}
+                      <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
+                        {clipUrl ? (
+                          /* Play icon overlay for done clips */
+                          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-white/80">
+                            <Play className="w-4 h-4 text-green-600 ml-0.5" />
+                          </div>
+                        ) : (
+                          <Icon
+                            className={`w-5 h-5 ${config.color} ${
+                              status === "running" ? "animate-spin" : ""
+                            }`}
+                          />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  <div className="p-2 md:p-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-neutral-700">
-                        Scene {i + 1}
-                      </span>
-                      <span className={`text-xs ${config.color}`}>
-                        {config.label}
-                      </span>
+                    <div className="p-2 md:p-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-neutral-700">
+                          Scene {i + 1}
+                        </span>
+                        <span className={`text-xs ${config.color}`}>
+                          {config.label}
+                        </span>
+                      </div>
+                      {scene.caption && (
+                        <p className="text-xs text-neutral-400 mt-0.5 truncate">
+                          {scene.caption}
+                        </p>
+                      )}
+                      {status === "failed" && render && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            retryScene(render.id);
+                          }}
+                          className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent hover:underline min-h-[44px] sm:min-h-0"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                          Retry
+                        </button>
+                      )}
                     </div>
-                    {scene.caption && (
-                      <p className="text-xs text-neutral-400 mt-0.5 truncate">
-                        {scene.caption}
-                      </p>
-                    )}
-                    {status === "failed" && render && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          retryScene(render.id);
-                        }}
-                        className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent hover:underline min-h-[44px] sm:min-h-0"
+                  </motion.div>
+
+                  {/* ─── Mobile Inline Video Preview ─── */}
+                  {/* Shows directly below the tapped scene card on mobile (< lg) */}
+                  <AnimatePresence>
+                    {isSelected && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease }}
+                        className="lg:hidden overflow-hidden"
                       >
-                        <RefreshCw className="w-3 h-3" />
-                        Retry
-                      </button>
+                        <div className="mt-2 rounded-xl bg-neutral-100 border border-neutral-200 overflow-hidden">
+                          {/* Close button */}
+                          <div className="flex items-center justify-between px-3 pt-2">
+                            <span className="text-xs font-medium text-neutral-500">
+                              {scene.caption ?? selectedAsset?.room_type ?? `Scene ${i + 1}`}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedSceneId(null);
+                              }}
+                              className="p-1 rounded-full hover:bg-neutral-200 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5 text-neutral-400" />
+                            </button>
+                          </div>
+
+                          <div className="p-3">
+                            {clipUrl ? (
+                              <video
+                                key={clipUrl}
+                                src={clipUrl}
+                                controls
+                                autoPlay
+                                muted
+                                playsInline
+                                className="w-full rounded-lg shadow-sm"
+                              />
+                            ) : (
+                              <img
+                                src={getAssetUrl(scene.asset_id)}
+                                alt=""
+                                className="w-full rounded-lg shadow-sm"
+                              />
+                            )}
+                            {render && (
+                              <p className="text-xs text-neutral-400 mt-2 text-center">
+                                Status: {render.status}
+                                {render.duration_sec
+                                  ? ` — ${render.duration_sec}s`
+                                  : ""}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
                     )}
-                  </div>
-                </motion.div>
+                  </AnimatePresence>
+                </div>
               );
             })}
           </div>
@@ -414,7 +473,7 @@ export default function GeneratePage(): ReactNode {
           )}
         </div>
 
-        {/* Right Panel — Preview */}
+        {/* Right Panel — Preview (Desktop only, lg+) */}
         <div className="hidden lg:flex w-[45%] shrink-0 bg-neutral-100 rounded-2xl items-center justify-center overflow-hidden">
           {selectedScene ? (
             <motion.div

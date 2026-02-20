@@ -9,14 +9,109 @@ import {
   Loader2,
   Play,
   RefreshCw,
+  SkipForward,
 } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { StepNavigation } from "@/components/step-navigation";
 
 const ease = [0.23, 1, 0.32, 1] as const;
+
+/** Parse a playlist render's output_path into clip URLs */
+function parsePlaylist(
+  render: Render | undefined
+): { clips: string[]; totalDuration: number } | null {
+  if (!render?.output_path) return null;
+  if (!render.output_path.startsWith("playlist:")) return null;
+  try {
+    const json = render.output_path.slice("playlist:".length);
+    const data = JSON.parse(json);
+    if (data.type === "playlist" && Array.isArray(data.clips)) {
+      return { clips: data.clips, totalDuration: data.totalDuration ?? 0 };
+    }
+  } catch {
+    // Not valid JSON
+  }
+  return null;
+}
+
+/** Check if a render is a real MP4 (not a playlist) */
+function isRealVideo(render: Render | undefined): boolean {
+  if (!render?.output_path) return false;
+  return !render.output_path.startsWith("playlist:");
+}
+
+// ─── Playlist Video Player Component ──────────────────────────────────
+// Plays clips in sequence, auto-advancing when each clip ends.
+function PlaylistPlayer({
+  clips,
+  className,
+}: {
+  clips: string[];
+  className?: string;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const handleEnded = useCallback(() => {
+    setCurrentIndex((prev) => {
+      const next = prev + 1;
+      return next < clips.length ? next : 0; // Loop back to start
+    });
+  }, [clips.length]);
+
+  // Auto-play when clip changes
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) {
+      video.load();
+      video.play().catch(() => {
+        // Autoplay may be blocked
+      });
+    }
+  }, [currentIndex]);
+
+  if (clips.length === 0) return null;
+
+  return (
+    <div className={className}>
+      <video
+        ref={videoRef}
+        src={clips[currentIndex]}
+        controls
+        playsInline
+        onEnded={handleEnded}
+        className="w-full max-h-full rounded-xl shadow-lg"
+      />
+      <div className="flex items-center justify-center gap-2 mt-2">
+        <span className="text-xs text-neutral-400">
+          Clip {currentIndex + 1} of {clips.length}
+        </span>
+        {clips.length > 1 && (
+          <button
+            onClick={() =>
+              setCurrentIndex((prev) =>
+                prev + 1 < clips.length ? prev + 1 : 0
+              )
+            }
+            className="inline-flex items-center gap-1 text-xs text-accent hover:text-accent/80"
+          >
+            <SkipForward className="w-3 h-3" />
+            Next
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ResultsPage(): ReactNode {
   const params = useParams();
@@ -117,29 +212,42 @@ export default function ResultsPage(): ReactNode {
 
       console.log("[Results] Edit plan created, triggering render...");
 
-      // Step 2: Trigger the actual video assembly
-      const renderRes = await fetch(`/api/projects/${projectId}/render`, {
-        method: "POST",
-      });
-      const renderData = await renderRes.json();
+      // Step 2: Trigger the actual video assembly (fire-and-forget friendly)
+      // Use a longer timeout since the render may take a while
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 55000);
 
-      if (!renderRes.ok) {
-        console.error("[Results] Render error:", renderData);
-        // Don't alert — the render might be processing in the background
-      } else {
-        console.log("[Results] Render response:", renderData);
+      try {
+        const renderRes = await fetch(`/api/projects/${projectId}/render`, {
+          method: "POST",
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+        const renderData = await renderRes.json();
+
+        if (!renderRes.ok) {
+          console.error("[Results] Render error:", renderData);
+        } else {
+          console.log("[Results] Render response:", renderData);
+        }
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        // If the fetch times out, the render may still be processing server-side
+        console.warn("[Results] Render fetch timed out or aborted — will poll for completion");
       }
 
       await loadData();
     } catch (err) {
       console.error("Render trigger error:", err);
-      alert(`Error: ${err instanceof Error ? err.message : "Failed to start rendering"}`);
+      alert(
+        `Error: ${err instanceof Error ? err.message : "Failed to start rendering"}`
+      );
     }
     setTriggering(false);
   };
 
   const getDownloadUrl = (render: Render) => {
-    if (!render.output_path) return null;
+    if (!render.output_path || !isRealVideo(render)) return null;
     const { data } = supabase.storage
       .from("final-exports")
       .getPublicUrl(render.output_path);
@@ -167,12 +275,109 @@ export default function ResultsPage(): ReactNode {
   const currentRender =
     activeVideo === "vertical" ? verticalRender : horizontalRender;
   const currentUrl = currentRender ? getDownloadUrl(currentRender) : null;
+  const currentPlaylist = parsePlaylist(currentRender);
+  const hasVideo =
+    currentRender?.status === "done" &&
+    (currentUrl || currentPlaylist);
+
+  // ─── Render format card helper ──────────────────────────────────────
+  const renderFormatCard = (
+    render: Render | undefined,
+    type: "vertical" | "horizontal",
+    label: string,
+    description: string,
+    delay: number
+  ) => {
+    if (!render) return null;
+    const isReal = isRealVideo(render);
+    const downloadUrl = isReal ? getDownloadUrl(render) : null;
+    const playlist = parsePlaylist(render);
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay, ease }}
+        onClick={() => setActiveVideo(type)}
+        className={`border rounded-xl p-4 bg-white cursor-pointer transition-all ${
+          activeVideo === type
+            ? "border-accent ring-1 ring-accent/30"
+            : "border-neutral-200 hover:border-accent/30"
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-neutral-800">{label}</h3>
+            <p className="text-xs text-neutral-400 mt-0.5">{description}</p>
+            {render.status === "done" && playlist && (
+              <p className="text-xs text-blue-500 mt-0.5">
+                {playlist.clips.length} clips — plays in sequence
+              </p>
+            )}
+          </div>
+          {render.status === "done" && downloadUrl && (
+            <a
+              href={downloadUrl}
+              download
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download
+            </a>
+          )}
+          {(render.status === "running" || render.status === "queued") && (
+            <div className="flex items-center gap-1.5 text-xs text-neutral-400">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Rendering...
+            </div>
+          )}
+          {render.status === "failed" && (
+            <span className="text-xs text-red-500">Failed</span>
+          )}
+        </div>
+      </motion.div>
+    );
+  };
+
+  // ─── Video preview component (shared between mobile and desktop) ────
+  const videoPreview = () => {
+    if (!hasVideo) return null;
+
+    if (currentPlaylist) {
+      return (
+        <PlaylistPlayer
+          clips={currentPlaylist.clips}
+          className={`w-full ${activeVideo === "vertical" ? "max-w-[280px] mx-auto" : ""}`}
+        />
+      );
+    }
+
+    if (currentUrl) {
+      return (
+        <div className={`w-full ${activeVideo === "vertical" ? "max-w-[280px] mx-auto" : ""}`}>
+          <video
+            key={currentUrl}
+            src={currentUrl}
+            controls
+            playsInline
+            className="w-full rounded-xl shadow-lg"
+          />
+        </div>
+      );
+    }
+
+    return null;
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex-1 min-h-0 flex gap-6 p-4 md:p-6 lg:p-8 overflow-hidden">
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 p-4 md:p-6 lg:p-8 overflow-hidden">
         {/* Left Panel — Controls */}
-        <div className="flex-1 min-w-0 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div
+          className="flex-1 min-w-0 overflow-y-auto"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           <Link
             href="/app"
             className="inline-flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-700 mb-3"
@@ -181,12 +386,12 @@ export default function ResultsPage(): ReactNode {
             Back to Dashboard
           </Link>
 
-          <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 mb-1">
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-neutral-900 mb-1">
             {project?.title ?? "Results"}
           </h1>
           <p className="text-neutral-500 text-sm mb-6">
             {isComplete && hasDoneRenders
-              ? "Your videos are ready for download"
+              ? "Your videos are ready"
               : isRendering
                 ? "Your videos are being rendered..."
                 : "Generate your final videos"}
@@ -210,7 +415,7 @@ export default function ResultsPage(): ReactNode {
               <button
                 onClick={triggerRender}
                 disabled={triggering}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 min-h-[44px]"
               >
                 {triggering ? (
                   <>
@@ -247,97 +452,29 @@ export default function ResultsPage(): ReactNode {
           {/* Video format selector */}
           {(verticalRender || horizontalRender) && (
             <div className="space-y-3">
-              {/* Vertical */}
-              {verticalRender && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1, ease }}
-                  onClick={() => setActiveVideo("vertical")}
-                  className={`border rounded-xl p-4 bg-white cursor-pointer transition-all ${
-                    activeVideo === "vertical"
-                      ? "border-accent ring-1 ring-accent/30"
-                      : "border-neutral-200 hover:border-accent/30"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-semibold text-neutral-800">
-                        Vertical (9:16)
-                      </h3>
-                      <p className="text-xs text-neutral-400 mt-0.5">
-                        Optimized for Reels, TikTok, and Stories
-                      </p>
-                    </div>
-                    {verticalRender.status === "done" && verticalRender.output_path && (
-                      <a
-                        href={getDownloadUrl(verticalRender) ?? "#"}
-                        download
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download
-                      </a>
-                    )}
-                    {(verticalRender.status === "running" || verticalRender.status === "queued") && (
-                      <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Rendering...
-                      </div>
-                    )}
-                    {verticalRender.status === "failed" && (
-                      <span className="text-xs text-red-500">Failed</span>
-                    )}
-                  </div>
-                </motion.div>
+              {renderFormatCard(
+                verticalRender,
+                "vertical",
+                "Vertical (9:16)",
+                "Optimized for Reels, TikTok, and Stories",
+                0.1
               )}
+              {renderFormatCard(
+                horizontalRender,
+                "horizontal",
+                "Horizontal (16:9)",
+                "Optimized for YouTube and MLS",
+                0.2
+              )}
+            </div>
+          )}
 
-              {/* Horizontal */}
-              {horizontalRender && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, ease }}
-                  onClick={() => setActiveVideo("horizontal")}
-                  className={`border rounded-xl p-4 bg-white cursor-pointer transition-all ${
-                    activeVideo === "horizontal"
-                      ? "border-accent ring-1 ring-accent/30"
-                      : "border-neutral-200 hover:border-accent/30"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-semibold text-neutral-800">
-                        Horizontal (16:9)
-                      </h3>
-                      <p className="text-xs text-neutral-400 mt-0.5">
-                        Optimized for YouTube and MLS
-                      </p>
-                    </div>
-                    {horizontalRender.status === "done" && horizontalRender.output_path && (
-                      <a
-                        href={getDownloadUrl(horizontalRender) ?? "#"}
-                        download
-                        onClick={(e) => e.stopPropagation()}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download
-                      </a>
-                    )}
-                    {(horizontalRender.status === "running" || horizontalRender.status === "queued") && (
-                      <div className="flex items-center gap-1.5 text-xs text-neutral-400">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        Rendering...
-                      </div>
-                    )}
-                    {horizontalRender.status === "failed" && (
-                      <span className="text-xs text-red-500">Failed</span>
-                    )}
-                  </div>
-                </motion.div>
-              )}
+          {/* Mobile Video Preview — shown inline below format cards */}
+          {hasVideo && (
+            <div className="lg:hidden mt-4">
+              <div className="bg-neutral-100 rounded-2xl p-4">
+                {videoPreview()}
+              </div>
             </div>
           )}
 
@@ -347,7 +484,7 @@ export default function ResultsPage(): ReactNode {
               <button
                 onClick={triggerRender}
                 disabled={triggering}
-                className="inline-flex items-center gap-2 text-xs text-neutral-400 hover:text-neutral-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 text-xs text-neutral-400 hover:text-neutral-700 disabled:opacity-50 min-h-[44px]"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Regenerate videos with different settings
@@ -356,27 +493,17 @@ export default function ResultsPage(): ReactNode {
           )}
         </div>
 
-        {/* Right Panel — Video Preview */}
+        {/* Right Panel — Video Preview (Desktop only) */}
         <div className="hidden lg:flex w-[45%] shrink-0 bg-neutral-100 rounded-2xl items-center justify-center overflow-hidden">
-          {currentUrl && currentRender?.status === "done" && currentRender?.output_path ? (
+          {hasVideo ? (
             <motion.div
               key={activeVideo}
-              className="flex flex-col items-center p-4 w-full h-full"
+              className="flex flex-col items-center p-4 w-full h-full justify-center"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3, ease }}
             >
-              <div
-                className={`flex-1 flex items-center justify-center w-full ${
-                  activeVideo === "vertical" ? "max-w-[280px]" : ""
-                }`}
-              >
-                <video
-                  src={currentUrl}
-                  controls
-                  className="max-w-full max-h-full rounded-xl shadow-lg"
-                />
-              </div>
+              {videoPreview()}
             </motion.div>
           ) : (
             <div className="flex flex-col items-center text-neutral-400">
