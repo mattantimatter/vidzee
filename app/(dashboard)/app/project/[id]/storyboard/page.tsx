@@ -35,6 +35,7 @@ import {
 import { motion } from "motion/react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { StepNavigation } from "@/components/step-navigation";
 
 const ease = [0.23, 1, 0.32, 1] as const;
 
@@ -397,11 +398,11 @@ export default function StoryboardPage(): ReactNode {
     }
   };
 
-  const handleContinue = async () => {
-    // Save style pack and video format (video_format column may not exist yet — ignore error)
+  const saveStoryboardState = async () => {
+    // Save style pack and video format
     await supabase
       .from("projects")
-      .update({ style_pack_id: stylePack, cut_length: cutLength, status: "storyboard_ready" })
+      .update({ style_pack_id: stylePack, cut_length: cutLength })
       .eq("id", projectId);
 
     // Try to save video_format — ignore if column doesn't exist
@@ -413,7 +414,14 @@ export default function StoryboardPage(): ReactNode {
     } catch {
       // Column may not exist yet
     }
+  };
 
+  const handleContinue = async () => {
+    await saveStoryboardState();
+    await supabase
+      .from("projects")
+      .update({ status: "storyboard_ready" })
+      .eq("id", projectId);
     router.push(`/app/project/${projectId}/generate`);
   };
 
@@ -441,227 +449,236 @@ export default function StoryboardPage(): ReactNode {
     : null;
 
   return (
-    <div className="flex flex-col lg:flex-row gap-4 md:gap-6 h-full min-h-0 p-4 md:p-6 lg:p-8">
-      {/* Left Panel — Controls & Scene List (independently scrollable) */}
-      <div
-        className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain lg:pr-2"
-        style={{ WebkitOverflowScrolling: "touch" }}
-      >
-        <div className="mb-6">
-          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
-            Storyboard
-          </h1>
-          <p className="text-neutral-500 text-sm mt-1">
-            {project?.title ?? "Untitled"} — {assets.length} photos uploaded
-          </p>
-        </div>
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 md:gap-6 p-4 md:p-6 lg:p-8 overflow-hidden">
+        {/* Left Panel — Controls & Scene List (independently scrollable) */}
+        <div
+          className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain lg:pr-2"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          <div className="mb-6">
+            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-100">
+              Storyboard
+            </h1>
+            <p className="text-neutral-500 text-sm mt-1">
+              {project?.title ?? "Untitled"} — {assets.length} photos uploaded
+            </p>
+          </div>
 
-        {/* Controls Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          {/* Style Pack */}
-          <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3">
-              Style Pack
-            </h3>
-            <div className="space-y-2">
-              {STYLE_PACKS.map((pack) => (
+          {/* Controls Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Style Pack */}
+            <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5">
+              <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3">
+                Style Pack
+              </h3>
+              <div className="space-y-2">
+                {STYLE_PACKS.map((pack) => (
+                  <button
+                    key={pack.id}
+                    onClick={() => setStylePack(pack.id)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl border transition-colors text-sm ${
+                      stylePack === pack.id
+                        ? "border-accent bg-accent/5 text-accent"
+                        : "border-neutral-200 dark:border-neutral-600 hover:border-accent/30 text-neutral-700 dark:text-neutral-300"
+                    }`}
+                  >
+                    <span className="font-medium">{pack.name}</span>
+                    <span className="block text-xs text-neutral-400 mt-0.5">
+                      {pack.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Video Format & Duration Info */}
+            <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5">
+              <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3">
+                Video Format
+              </h3>
+              <div className="grid grid-cols-2 gap-2 mb-4">
                 <button
-                  key={pack.id}
-                  onClick={() => setStylePack(pack.id)}
-                  className={`w-full text-left px-4 py-2.5 rounded-xl border transition-colors text-sm ${
-                    stylePack === pack.id
+                  onClick={() => setVideoFormat("16:9")}
+                  className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border transition-colors text-sm ${
+                    videoFormat === "16:9"
                       ? "border-accent bg-accent/5 text-accent"
                       : "border-neutral-200 dark:border-neutral-600 hover:border-accent/30 text-neutral-700 dark:text-neutral-300"
                   }`}
                 >
-                  <span className="font-medium">{pack.name}</span>
-                  <span className="block text-xs text-neutral-400 mt-0.5">
-                    {pack.description}
-                  </span>
+                  <Monitor className="w-5 h-5" />
+                  <span className="font-medium text-xs">Landscape</span>
+                  <span className="text-[10px] text-neutral-400">16:9 · YouTube / MLS</span>
                 </button>
-              ))}
-            </div>
-          </div>
+                <button
+                  onClick={() => setVideoFormat("9:16")}
+                  className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border transition-colors text-sm ${
+                    videoFormat === "9:16"
+                      ? "border-accent bg-accent/5 text-accent"
+                      : "border-neutral-200 dark:border-neutral-600 hover:border-accent/30 text-neutral-700 dark:text-neutral-300"
+                  }`}
+                >
+                  <Smartphone className="w-5 h-5" />
+                  <span className="font-medium text-xs">Portrait</span>
+                  <span className="text-[10px] text-neutral-400">9:16 · Reels / TikTok</span>
+                </button>
+              </div>
 
-          {/* Video Format & Duration Info */}
-          <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5">
-            <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3">
-              Video Format
-            </h3>
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <button
-                onClick={() => setVideoFormat("16:9")}
-                className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border transition-colors text-sm ${
-                  videoFormat === "16:9"
-                    ? "border-accent bg-accent/5 text-accent"
-                    : "border-neutral-200 dark:border-neutral-600 hover:border-accent/30 text-neutral-700 dark:text-neutral-300"
-                }`}
-              >
-                <Monitor className="w-5 h-5" />
-                <span className="font-medium text-xs">Landscape</span>
-                <span className="text-[10px] text-neutral-400">16:9 · YouTube / MLS</span>
-              </button>
-              <button
-                onClick={() => setVideoFormat("9:16")}
-                className={`flex flex-col items-center gap-1.5 px-3 py-3 rounded-xl border transition-colors text-sm ${
-                  videoFormat === "9:16"
-                    ? "border-accent bg-accent/5 text-accent"
-                    : "border-neutral-200 dark:border-neutral-600 hover:border-accent/30 text-neutral-700 dark:text-neutral-300"
-                }`}
-              >
-                <Smartphone className="w-5 h-5" />
-                <span className="font-medium text-xs">Portrait</span>
-                <span className="text-[10px] text-neutral-400">9:16 · Reels / TikTok</span>
-              </button>
-            </div>
-
-            {/* Auto-calculated duration info */}
-            <div className="p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-700 text-xs text-neutral-600 dark:text-neutral-300">
-              <div className="flex items-center justify-between">
-                <span>
-                  <span className="font-semibold">{assets.length}</span> photos →{" "}
-                  <span className="font-semibold capitalize">{cutLength}</span> cut
-                </span>
-                {scenes.length > 0 && (
+              {/* Auto-calculated duration info */}
+              <div className="p-2.5 rounded-xl bg-neutral-50 dark:bg-neutral-700 text-xs text-neutral-600 dark:text-neutral-300">
+                <div className="flex items-center justify-between">
                   <span>
-                    <span className="font-semibold">{includedCount}</span> scenes ·{" "}
-                    <span className="font-semibold">~{estimatedDuration}s</span>
+                    <span className="font-semibold">{assets.length}</span> photos →{" "}
+                    <span className="font-semibold capitalize">{cutLength}</span> cut
                   </span>
-                )}
+                  {scenes.length > 0 && (
+                    <span>
+                      <span className="font-semibold">{includedCount}</span> scenes ·{" "}
+                      <span className="font-semibold">~{estimatedDuration}s</span>
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Generate Button */}
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <button
-            onClick={generateStoryboard}
-            disabled={generating || assets.length === 0}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
-          >
-            {generating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Generating Storyboard...
-              </>
-            ) : scenes.length > 0 ? (
-              <>
-                <RefreshCw className="w-4 h-4" />
-                Regenerate Storyboard
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                Generate AI Storyboard
-              </>
-            )}
-          </button>
-
-          {scenes.length > 0 && (
+          {/* Generate Button */}
+          <div className="mb-6 flex flex-wrap items-center gap-3">
             <button
-              onClick={resetOrder}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-600 text-neutral-600 dark:text-neutral-300 text-sm font-medium hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
-              title="Reset to AI-recommended order"
+              onClick={generateStoryboard}
+              disabled={generating || assets.length === 0}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50"
             >
-              <RotateCcw className="w-4 h-4" />
-              Reset Order
+              {generating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Generating Storyboard...
+                </>
+              ) : scenes.length > 0 ? (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Regenerate Storyboard
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4" />
+                  Generate AI Storyboard
+                </>
+              )}
             </button>
+
+            {scenes.length > 0 && (
+              <button
+                onClick={resetOrder}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-neutral-200 dark:border-neutral-600 text-neutral-600 dark:text-neutral-300 text-sm font-medium hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
+                title="Reset to AI-recommended order"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Reset Order
+              </button>
+            )}
+          </div>
+
+          {/* Scene List with Drag-to-Reorder */}
+          {scenes.length > 0 && (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={scenes.map((s) => s.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <div className="space-y-2 mb-6">
+                  <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3">
+                    Scenes — drag to reorder
+                  </h3>
+                  {scenes.map((scene, i) => {
+                    const asset = assets.find((a) => a.id === scene.asset_id);
+                    const isSelected = selectedScene?.id === scene.id;
+                    return (
+                      <SortableSceneRow
+                        key={scene.id}
+                        scene={scene}
+                        index={i}
+                        asset={asset}
+                        isSelected={isSelected}
+                        getAssetUrl={getAssetUrl}
+                        onSelect={() => setSelectedScene(scene)}
+                        onToggle={() => toggleScene(scene.id, !scene.include)}
+                      />
+                    );
+                  })}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )}
+
+          {/* Continue */}
+          {scenes.length > 0 && (
+            <div className="pb-6">
+              <button
+                onClick={handleContinue}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors min-h-[44px]"
+              >
+                Continue to Generate Clips
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           )}
         </div>
 
-        {/* Scene List with Drag-to-Reorder */}
-        {scenes.length > 0 && (
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext
-              items={scenes.map((s) => s.id)}
-              strategy={verticalListSortingStrategy}
+        {/* Right Panel — Preview (independently scrollable) */}
+        <div
+          className="hidden lg:flex w-[45%] shrink-0 bg-neutral-100 dark:bg-neutral-800 rounded-2xl items-center justify-center overflow-y-auto"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
+          {selectedAsset ? (
+            <motion.div
+              key={selectedScene?.id}
+              className="flex flex-col items-center p-4"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3, ease }}
             >
-              <div className="space-y-2 mb-6">
-                <h3 className="text-xs font-semibold text-neutral-400 uppercase tracking-wider mb-3">
-                  Scenes — drag to reorder
-                </h3>
-                {scenes.map((scene, i) => {
-                  const asset = assets.find((a) => a.id === scene.asset_id);
-                  const isSelected = selectedScene?.id === scene.id;
-                  return (
-                    <SortableSceneRow
-                      key={scene.id}
-                      scene={scene}
-                      index={i}
-                      asset={asset}
-                      isSelected={isSelected}
-                      getAssetUrl={getAssetUrl}
-                      onSelect={() => setSelectedScene(scene)}
-                      onToggle={() => toggleScene(scene.id, !scene.include)}
-                    />
-                  );
-                })}
+              <img
+                src={getAssetUrl(selectedAsset)}
+                alt=""
+                className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg"
+              />
+              <div className="mt-4 text-center">
+                <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
+                  {selectedScene?.caption ?? getDisplayRoomName(selectedAsset.room_type) ?? "Scene Preview"}
+                </p>
+                {selectedAsset.room_type && (
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold mt-2 ${getRoomBadgeColor(selectedAsset.room_type)}`}
+                  >
+                    {getDisplayRoomName(selectedAsset.room_type)}
+                  </span>
+                )}
+                <p className="text-xs text-neutral-400 mt-1">
+                  {selectedScene?.target_duration_sec}s —{" "}
+                  {selectedScene?.motion_template ?? "auto"}
+                </p>
               </div>
-            </SortableContext>
-          </DndContext>
-        )}
-
-        {/* Continue */}
-        {scenes.length > 0 && (
-          <div className="pb-6">
-            <button
-              onClick={handleContinue}
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors min-h-[44px]"
-            >
-              Continue to Generate Clips
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Right Panel — Preview (independently scrollable) */}
-      <div
-        className="hidden lg:flex w-[45%] shrink-0 bg-neutral-100 dark:bg-neutral-800 rounded-2xl items-center justify-center overflow-y-auto"
-        style={{ WebkitOverflowScrolling: "touch" }}
-      >
-        {selectedAsset ? (
-          <motion.div
-            key={selectedScene?.id}
-            className="flex flex-col items-center p-4"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3, ease }}
-          >
-            <img
-              src={getAssetUrl(selectedAsset)}
-              alt=""
-              className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg"
-            />
-            <div className="mt-4 text-center">
-              <p className="text-sm font-medium text-neutral-700 dark:text-neutral-200">
-                {selectedScene?.caption ?? getDisplayRoomName(selectedAsset.room_type) ?? "Scene Preview"}
-              </p>
-              {selectedAsset.room_type && (
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold mt-2 ${getRoomBadgeColor(selectedAsset.room_type)}`}
-                >
-                  {getDisplayRoomName(selectedAsset.room_type)}
-                </span>
-              )}
-              <p className="text-xs text-neutral-400 mt-1">
-                {selectedScene?.target_duration_sec}s —{" "}
-                {selectedScene?.motion_template ?? "auto"}
-              </p>
+            </motion.div>
+          ) : (
+            <div className="flex flex-col items-center text-neutral-400">
+              <Play className="w-12 h-12 mb-3 text-neutral-300" />
+              <p className="text-sm font-medium">Select a scene to preview</p>
             </div>
-          </motion.div>
-        ) : (
-          <div className="flex flex-col items-center text-neutral-400">
-            <Play className="w-12 h-12 mb-3 text-neutral-300" />
-            <p className="text-sm font-medium">Select a scene to preview</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* Step Navigation */}
+      <StepNavigation
+        projectId={projectId}
+        currentStep={2}
+        onSave={saveStoryboardState}
+      />
     </div>
   );
 }

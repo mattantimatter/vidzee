@@ -30,7 +30,7 @@ export default async function ProjectLayout({
   return (
     <div className="flex flex-col h-full min-h-0">
       <ProjectProgressBar projectId={projectId} status={status} />
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-hidden">
         {children}
       </div>
     </div>
