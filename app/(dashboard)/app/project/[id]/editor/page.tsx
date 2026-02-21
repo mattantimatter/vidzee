@@ -199,7 +199,7 @@ export default function EditorPage(): ReactNode {
   // ─── Data Loading ───────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
-    const [projectRes, scenesRes, assetsRes, rendersRes] = await Promise.all([
+    const [projectRes, scenesRes, assetsRes, rendersRes, editorStateRes] = await Promise.all([
       supabase.from("projects").select("*").eq("id", projectId).single(),
       supabase
         .from("storyboard_scenes")
@@ -215,6 +215,14 @@ export default function EditorPage(): ReactNode {
         .eq("type", "scene_clip")
         .eq("status", "done")
         .order("created_at"),
+      // Load saved editor state from the renders table (type="editor_state")
+      supabase
+        .from("renders")
+        .select("input_refs")
+        .eq("project_id", projectId)
+        .eq("type", "editor_state")
+        .limit(1)
+        .single(),
     ]);
 
     const proj = projectRes.data as Project | null;
@@ -224,9 +232,8 @@ export default function EditorPage(): ReactNode {
     const assets = (assetsRes.data ?? []) as Asset[];
     const renders = (rendersRes.data ?? []) as Render[];
 
-    // Check if we have saved editor state
-    const savedState = (proj as Record<string, unknown> | null)
-      ?.edit_state as EditorState | null;
+    // Check if we have saved editor state (stored in renders table)
+    const savedState = editorStateRes.data?.input_refs as EditorState | null;
 
     if (savedState?.clips && savedState.clips.length > 0) {
       setClips(savedState.clips);
@@ -363,12 +370,7 @@ export default function EditorPage(): ReactNode {
 
       setOverlays(defaultOverlays);
 
-      // Set music from project if available
-      const projMusicUrl = (proj as Record<string, unknown> | null)
-        ?.music_url as string | null;
-      if (projMusicUrl) {
-        setMusicUrl(projMusicUrl);
-      }
+      // Music URL is stored in the editor state (renders table), not in projects
     }
 
     setLoading(false);
@@ -497,6 +499,9 @@ export default function EditorPage(): ReactNode {
   }, [isPlaying, currentClipIndex, clips, handleVideoEnded]);
 
   // ─── Save Editor State ──────────────────────────────────────────────────
+  // We store the editor state as a special render record (type="editor_state")
+  // in the renders table using the input_refs jsonb column.
+  // This avoids needing new columns on the projects table.
 
   const saveEditorState = useCallback(async () => {
     setSaving(true);
@@ -509,11 +514,39 @@ export default function EditorPage(): ReactNode {
       totalDuration,
     };
 
+    // Check if an editor_state render already exists for this project
+    const { data: existing } = await supabase
+      .from("renders")
+      .select("id")
+      .eq("project_id", projectId)
+      .eq("type", "editor_state")
+      .limit(1)
+      .single();
+
+    if (existing?.id) {
+      // Update existing
+      await supabase
+        .from("renders")
+        .update({
+          input_refs: editorState as unknown as Record<string, unknown>,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id);
+    } else {
+      // Insert new
+      await supabase.from("renders").insert({
+        project_id: projectId,
+        type: "editor_state",
+        status: "done",
+        provider: "client",
+        input_refs: editorState as unknown as Record<string, unknown>,
+      });
+    }
+
+    // Also update project status
     await supabase
       .from("projects")
       .update({
-        edit_state: editorState as unknown as Record<string, unknown>,
-        music_url: musicUrl,
         status: "editing",
         updated_at: new Date().toISOString(),
       })

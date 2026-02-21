@@ -6,23 +6,16 @@
  * 1. POST to submit → get request_id
  * 2. GET status → check if COMPLETED
  * 3. GET result → get audio URL
+ *
+ * The generated audio URL is returned to the client, which saves it
+ * as part of the editor state in the renders table.
  */
 
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 const FAL_API_KEY = process.env.FAL_API_KEY ?? "";
 const FAL_QUEUE_URL = "https://queue.fal.run/beatoven/music-generation";
 const FAL_STATUS_URL = "https://queue.fal.run/beatoven/music-generation/requests";
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-function getAdminClient() {
-  return createClient(supabaseUrl, supabaseServiceKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
 
 // ─── POST: Submit music generation ──────────────────────────────────────────
 
@@ -30,7 +23,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: projectId } = await params;
+  await params; // consume params (project ID available if needed for logging)
 
   if (!FAL_API_KEY) {
     return NextResponse.json(
@@ -97,16 +90,6 @@ export async function POST(
         submitData.url;
 
       if (audioUrl) {
-        // Save to project
-        const supabase = getAdminClient();
-        await supabase
-          .from("projects")
-          .update({
-            music_url: audioUrl,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", projectId);
-
         return NextResponse.json({
           status: "completed",
           audioUrl,
@@ -138,7 +121,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id: projectId } = await params;
+  await params; // consume params
+
   const { searchParams } = new URL(request.url);
   const requestId = searchParams.get("requestId");
 
@@ -199,16 +183,6 @@ export async function GET(
         resultData.url;
 
       if (audioUrl) {
-        // Save to project
-        const supabase = getAdminClient();
-        await supabase
-          .from("projects")
-          .update({
-            music_url: audioUrl,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", projectId);
-
         return NextResponse.json({
           status: "completed",
           audioUrl,
