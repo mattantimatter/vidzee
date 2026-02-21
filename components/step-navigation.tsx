@@ -13,13 +13,13 @@ const STEP_ROUTES = [
   { step: 1, label: "Upload Photos", path: (_id: string) => `/app/new` },
   { step: 2, label: "AI Storyboard", path: (id: string) => `/app/project/${id}/storyboard` },
   { step: 3, label: "Generate Clips", path: (id: string) => `/app/project/${id}/generate` },
-  { step: 4, label: "Listing Details", path: (id: string) => `/app/project/${id}/details` },
-  { step: 5, label: "Final Video", path: (id: string) => `/app/project/${id}/results` },
+  { step: 4, label: "Edit Video", path: (id: string) => `/app/project/${id}/editor` },
+  { step: 5, label: "Export", path: (id: string) => `/app/project/${id}/results` },
 ];
 
 interface StepNavigationProps {
   projectId: string;
-  currentStep: number; // 1-5
+  currentStep: number; // 1-5 (Upload, Storyboard, Generate, Edit, Export)
   onSave?: () => Promise<void>;
 }
 

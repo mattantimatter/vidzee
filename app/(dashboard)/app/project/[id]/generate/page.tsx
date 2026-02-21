@@ -462,11 +462,11 @@ export default function GeneratePage(): ReactNode {
               </p>
               <button
                 onClick={() =>
-                  router.push(`/app/project/${projectId}/details`)
+                  router.push(`/app/project/${projectId}/editor`)
                 }
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 transition-colors min-h-[44px]"
               >
-                Continue to Listing Details
+                Continue to Edit Video
                 <ArrowRight className="w-4 h-4" />
               </button>
             </motion.div>

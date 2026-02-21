@@ -48,6 +48,11 @@ export const StoryboardSceneSchema = z.object({
     "pan_right",
     "tilt_up",
     "tilt_down",
+    "orbit",
+    "crane_up",
+    "tracking_left",
+    "tracking_right",
+    "dolly_back",
   ]),
   target_duration_sec: z.number().min(2).max(10).default(3),
 });
@@ -308,7 +313,7 @@ export async function generateStoryboard(params: {
 You MUST respond with valid JSON matching this exact schema:
 {
   "room_tags": [{ "asset_id": "uuid", "room_type": "string", "confidence": 0.0-1.0, "description": "string" }],
-  "scenes": [{ "asset_id": "uuid", "scene_order": 1, "caption": "string", "motion_template": "push_in|pan_left|pan_right|tilt_up|tilt_down", "target_duration_sec": 3 }],
+  "scenes": [{ "asset_id": "uuid", "scene_order": 1, "caption": "string", "motion_template": "push_in|pan_left|pan_right|tilt_up|tilt_down|orbit|crane_up|tracking_left|tracking_right|dolly_back", "target_duration_sec": 3 }],
   "narrative_arc": "string describing the video flow"
 }
 
@@ -398,15 +403,18 @@ ADDITIONAL RULES:
 - The room_type field MUST use the exact snake_case values listed above (e.g., "living_room", "primary_suite", "primary_bathroom")
 - Create ${params.sceneRange.min} to ${params.sceneRange.max} scenes for a "${params.cutLength}" cut
 - Vary motion templates for visual interest (don't repeat the same motion more than 2 times in a row)
+- Available motion templates: push_in, pan_left, pan_right, tilt_up, tilt_down, orbit, crane_up, tracking_left, tracking_right, dolly_back
 - Recommended motion templates per room type:
-  • Exterior/aerial: "pan_left" or "pan_right" (sweeping reveal)
-  • Entry/foyer: "push_in" (welcoming forward motion)
-  • Living room/great room: "pan_left" or "pan_right" (showcase the space)
-  • Kitchen: "pan_right" or "push_in" (follow the countertop line)
-  • Dining room: "pan_left" or "pan_right" (reveal the table setting)
-  • Bedrooms: "push_in" (intimate, inviting)
-  • Bathrooms: "tilt_up" or "push_in" (reveal fixtures)
-  • Backyard/pool: "pan_left" or "tilt_down" (reveal the outdoor space)
+  • Exterior/aerial: "pan_left" or "pan_right" or "orbit" (sweeping reveal)
+  • Entry/foyer: "push_in" or "tracking_right" (welcoming forward motion)
+  • Living room/great room: "pan_left" or "orbit" or "tracking_left" (showcase the space)
+  • Kitchen: "tracking_right" or "push_in" (follow the countertop line)
+  • Dining room: "orbit" or "pan_left" (reveal the table setting)
+  • Bedrooms: "push_in" or "dolly_back" (intimate, inviting)
+  • Bathrooms: "tilt_up" or "crane_up" (reveal fixtures)
+  • Backyard/pool: "pan_left" or "crane_up" or "dolly_back" (reveal the outdoor space)
+  • Garage/utility: "tracking_left" or "push_in" (functional reveal)
+  • Pool/garden: "orbit" or "crane_up" (dramatic reveal)
 - Write short, elegant captions suitable for real estate video overlays (e.g., "Sun-Drenched Living Room", "Chef's Kitchen with Quartz Island", "Resort-Style Pool & Patio")
 - Style pack: "${params.stylePackId}"
 - IMPORTANT: Use the exact asset IDs provided — do not invent new IDs

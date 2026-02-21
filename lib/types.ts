@@ -10,6 +10,7 @@ export type ProjectStatus =
   | "clips_queued"
   | "clips_generating"
   | "clips_ready"
+  | "editing"
   | "details_ready"
   | "render_queued"
   | "rendering"
@@ -31,7 +32,60 @@ export type MotionTemplate =
   | "pan_left"
   | "pan_right"
   | "tilt_up"
-  | "tilt_down";
+  | "tilt_down"
+  | "orbit"
+  | "crane_up"
+  | "tracking_left"
+  | "tracking_right"
+  | "dolly_back";
+
+export type TransitionType =
+  | "cut"
+  | "dissolve"
+  | "fade_black"
+  | "wipe_left"
+  | "wipe_right";
+
+export type OverlayType =
+  | "none"
+  | "intro"
+  | "lower_third"
+  | "price_card"
+  | "beds_baths"
+  | "outro";
+
+export interface EditorClip {
+  id: string;
+  sceneId: string;
+  assetId: string;
+  clipUrl: string;
+  thumbnailUrl: string;
+  caption: string;
+  roomType: string;
+  order: number;
+  trimStart: number;
+  trimEnd: number;
+  duration: number;
+  transition: TransitionType;
+}
+
+export interface EditorOverlay {
+  id: string;
+  clipId: string;
+  type: OverlayType;
+  text: string;
+  startSec: number;
+  durationSec: number;
+}
+
+export interface EditorState {
+  clips: EditorClip[];
+  overlays: EditorOverlay[];
+  musicUrl: string | null;
+  musicVolume: number;
+  musicGenre: string;
+  totalDuration: number;
+}
 
 export interface Project {
   id: string;
@@ -54,6 +108,8 @@ export interface Project {
   cut_length: CutLength;
   video_format?: string | null;
   status: ProjectStatus;
+  edit_state?: EditorState | null;
+  music_url?: string | null;
   created_at: string;
   updated_at: string;
 }
