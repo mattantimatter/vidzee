@@ -7,9 +7,11 @@ import {
   Download,
   Film,
   Loader2,
+  Monitor,
   Play,
   RefreshCw,
   SkipForward,
+  Smartphone,
 } from "lucide-react";
 import { motion } from "motion/react";
 import Link from "next/link";
@@ -50,7 +52,6 @@ function isRealVideo(render: Render | undefined): boolean {
 }
 
 // ─── Playlist Video Player Component ──────────────────────────────────
-// Plays clips in sequence, auto-advancing when each clip ends.
 function PlaylistPlayer({
   clips,
   className,
@@ -64,18 +65,15 @@ function PlaylistPlayer({
   const handleEnded = useCallback(() => {
     setCurrentIndex((prev) => {
       const next = prev + 1;
-      return next < clips.length ? next : 0; // Loop back to start
+      return next < clips.length ? next : 0;
     });
   }, [clips.length]);
 
-  // Auto-play when clip changes
   useEffect(() => {
     const video = videoRef.current;
     if (video) {
       video.load();
-      video.play().catch(() => {
-        // Autoplay may be blocked
-      });
+      video.play().catch(() => {});
     }
   }, [currentIndex]);
 
@@ -122,9 +120,6 @@ export default function ResultsPage(): ReactNode {
   const [renders, setRenders] = useState<Render[]>([]);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
-  const [activeVideo, setActiveVideo] = useState<"vertical" | "horizontal">(
-    "vertical"
-  );
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(async () => {
@@ -147,19 +142,17 @@ export default function ResultsPage(): ReactNode {
     void loadData();
   }, [loadData]);
 
-  // Poll for render completion when renders are queued/running
+  // Poll for render completion
   useEffect(() => {
     const hasRunning = renders.some(
       (r) => r.status === "running" || r.status === "queued"
     );
 
     if (hasRunning && !pollIntervalRef.current) {
-      console.log("[Results] Starting poll for render completion (every 5s)");
       pollIntervalRef.current = setInterval(() => {
         void loadData();
       }, 5000);
     } else if (!hasRunning && pollIntervalRef.current) {
-      console.log("[Results] No running renders, stopping poll");
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
@@ -197,8 +190,6 @@ export default function ResultsPage(): ReactNode {
   const triggerRender = async () => {
     setTriggering(true);
     try {
-      // Step 1: Generate edit plan and create render rows
-      console.log("[Results] Triggering edit-plan...");
       const editPlanRes = await fetch(`/api/projects/${projectId}/edit-plan`, {
         method: "POST",
       });
@@ -210,10 +201,6 @@ export default function ResultsPage(): ReactNode {
         return;
       }
 
-      console.log("[Results] Edit plan created, triggering render...");
-
-      // Step 2: Trigger the actual video assembly (fire-and-forget friendly)
-      // Use a longer timeout since the render may take a while
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 55000);
 
@@ -224,16 +211,11 @@ export default function ResultsPage(): ReactNode {
         });
         clearTimeout(timeoutId);
         const renderData = await renderRes.json();
-
         if (!renderRes.ok) {
           console.error("[Results] Render error:", renderData);
-        } else {
-          console.log("[Results] Render response:", renderData);
         }
-      } catch (fetchErr) {
+      } catch {
         clearTimeout(timeoutId);
-        // If the fetch times out, the render may still be processing server-side
-        console.warn("[Results] Render fetch timed out or aborted — will poll for completion");
       }
 
       await loadData();
@@ -262,8 +244,39 @@ export default function ResultsPage(): ReactNode {
     );
   }
 
+  // ─── Task 7: Determine the single format that was generated ─────────────
+  // Use project.video_format to decide which render to show.
+  // Fall back to checking which render actually exists.
+  const projectFormat = (project as (Project & { video_format?: string | null }) | null)?.video_format;
+  const isPortrait = projectFormat === "9:16";
+
+  // Find the matching render for the generated format
   const verticalRender = renders.find((r) => r.type === "final_vertical");
   const horizontalRender = renders.find((r) => r.type === "final_horizontal");
+
+  // The primary render is the one matching the project's video_format
+  // If video_format is 9:16 → show vertical; if 16:9 → show horizontal
+  // If both exist (legacy), show the one matching the format; if neither, show whichever exists
+  let primaryRender: Render | undefined;
+  let primaryType: "vertical" | "horizontal";
+  let primaryLabel: string;
+  let primaryDescription: string;
+
+  if (isPortrait) {
+    primaryRender = verticalRender ?? horizontalRender;
+    primaryType = "vertical";
+    primaryLabel = "Vertical (9:16)";
+    primaryDescription = "Optimized for Reels, TikTok, and Stories";
+  } else {
+    primaryRender = horizontalRender ?? verticalRender;
+    primaryType = "horizontal";
+    primaryLabel = "Horizontal (16:9)";
+    primaryDescription = "Optimized for YouTube and MLS";
+  }
+
+  // If we have both renders (legacy), show both but highlight the primary
+  const hasBothRenders = verticalRender && horizontalRender;
+
   const hasDoneRenders =
     verticalRender?.status === "done" || horizontalRender?.status === "done";
   const isRendering =
@@ -272,21 +285,23 @@ export default function ResultsPage(): ReactNode {
     renders.some((r) => r.status === "running" || r.status === "queued");
   const isComplete = project?.status === "complete" || hasDoneRenders;
 
-  const currentRender =
-    activeVideo === "vertical" ? verticalRender : horizontalRender;
-  const currentUrl = currentRender ? getDownloadUrl(currentRender) : null;
-  const currentPlaylist = parsePlaylist(currentRender);
+  const primaryUrl = primaryRender ? getDownloadUrl(primaryRender) : null;
+  const primaryPlaylist = parsePlaylist(primaryRender);
   const hasVideo =
-    currentRender?.status === "done" &&
-    (currentUrl || currentPlaylist);
+    primaryRender?.status === "done" &&
+    (primaryUrl || primaryPlaylist);
 
-  // ─── Render format card helper ──────────────────────────────────────
+  // Format icon
+  const FormatIcon = isPortrait ? Smartphone : Monitor;
+
+  // ─── Render format card ─────────────────────────────────────────────────
   const renderFormatCard = (
     render: Render | undefined,
     type: "vertical" | "horizontal",
     label: string,
     description: string,
-    delay: number
+    delay: number,
+    isPrimary: boolean
   ) => {
     if (!render) return null;
     const isReal = isRealVideo(render);
@@ -295,19 +310,31 @@ export default function ResultsPage(): ReactNode {
 
     return (
       <motion.div
+        key={type}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay, ease }}
-        onClick={() => setActiveVideo(type)}
-        className={`border rounded-xl p-4 bg-white cursor-pointer transition-all ${
-          activeVideo === type
+        className={`border rounded-xl p-4 bg-white transition-all ${
+          isPrimary
             ? "border-accent ring-1 ring-accent/30"
-            : "border-neutral-200 hover:border-accent/30"
+            : "border-neutral-200"
         }`}
       >
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold text-neutral-800">{label}</h3>
+            <div className="flex items-center gap-2">
+              {type === "vertical" ? (
+                <Smartphone className="w-4 h-4 text-neutral-400" />
+              ) : (
+                <Monitor className="w-4 h-4 text-neutral-400" />
+              )}
+              <h3 className="text-sm font-semibold text-neutral-800">{label}</h3>
+              {isPrimary && (
+                <span className="px-1.5 py-0.5 rounded-full bg-accent/10 text-accent text-[9px] font-semibold uppercase tracking-wider">
+                  Generated
+                </span>
+              )}
+            </div>
             <p className="text-xs text-neutral-400 mt-0.5">{description}</p>
             {render.status === "done" && playlist && (
               <p className="text-xs text-blue-500 mt-0.5">
@@ -340,25 +367,25 @@ export default function ResultsPage(): ReactNode {
     );
   };
 
-  // ─── Video preview component (shared between mobile and desktop) ────
+  // ─── Video preview ──────────────────────────────────────────────────────
   const videoPreview = () => {
     if (!hasVideo) return null;
 
-    if (currentPlaylist) {
+    if (primaryPlaylist) {
       return (
         <PlaylistPlayer
-          clips={currentPlaylist.clips}
-          className={`w-full ${activeVideo === "vertical" ? "max-w-[280px] mx-auto" : ""}`}
+          clips={primaryPlaylist.clips}
+          className={`w-full ${isPortrait ? "max-w-[280px] mx-auto" : ""}`}
         />
       );
     }
 
-    if (currentUrl) {
+    if (primaryUrl) {
       return (
-        <div className={`w-full ${activeVideo === "vertical" ? "max-w-[280px] mx-auto" : ""}`}>
+        <div className={`w-full ${isPortrait ? "max-w-[280px] mx-auto" : ""}`}>
           <video
-            key={currentUrl}
-            src={currentUrl}
+            key={primaryUrl}
+            src={primaryUrl}
             controls
             playsInline
             className="w-full rounded-xl shadow-lg"
@@ -389,13 +416,21 @@ export default function ResultsPage(): ReactNode {
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-neutral-900 mb-1">
             {project?.title ?? "Results"}
           </h1>
-          <p className="text-neutral-500 text-sm mb-6">
-            {isComplete && hasDoneRenders
-              ? "Your videos are ready"
-              : isRendering
-                ? "Your videos are being rendered..."
-                : "Generate your final videos"}
-          </p>
+
+          {/* Format badge */}
+          <div className="flex items-center gap-2 mb-4">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-100 text-neutral-600 text-xs font-medium">
+              <FormatIcon className="w-3.5 h-3.5" />
+              {isPortrait ? "Portrait 9:16" : "Landscape 16:9"}
+            </div>
+            <p className="text-neutral-500 text-sm">
+              {isComplete && hasDoneRenders
+                ? "Your video is ready"
+                : isRendering
+                  ? "Rendering..."
+                  : "Generate your final video"}
+            </p>
+          </div>
 
           {/* Render trigger */}
           {!isComplete && !isRendering && (
@@ -409,7 +444,7 @@ export default function ResultsPage(): ReactNode {
                 Ready to render
               </h2>
               <p className="text-neutral-400 text-sm mb-5 max-w-sm mx-auto">
-                Generate your final vertical (9:16) and horizontal (16:9) videos
+                Generate your final {isPortrait ? "vertical (9:16)" : "horizontal (16:9)"} video
                 with captions, overlays, and transitions.
               </p>
               <button
@@ -425,7 +460,7 @@ export default function ResultsPage(): ReactNode {
                 ) : (
                   <>
                     <Film className="w-4 h-4" />
-                    Generate Final Videos
+                    Generate Final Video
                   </>
                 )}
               </button>
@@ -441,7 +476,7 @@ export default function ResultsPage(): ReactNode {
             >
               <Loader2 className="w-8 h-8 animate-spin text-accent mx-auto mb-3" />
               <h2 className="text-base font-semibold text-neutral-700 mb-1">
-                Rendering your videos
+                Rendering your video
               </h2>
               <p className="text-neutral-400 text-sm">
                 This may take a few minutes. You can leave and come back.
@@ -449,27 +484,44 @@ export default function ResultsPage(): ReactNode {
             </motion.div>
           )}
 
-          {/* Video format selector */}
-          {(verticalRender || horizontalRender) && (
+          {/* Video format card(s) — Task 7: show only the generated format */}
+          {(primaryRender || (verticalRender || horizontalRender)) && (
             <div className="space-y-3">
-              {renderFormatCard(
-                verticalRender,
-                "vertical",
-                "Vertical (9:16)",
-                "Optimized for Reels, TikTok, and Stories",
-                0.1
-              )}
-              {renderFormatCard(
-                horizontalRender,
-                "horizontal",
-                "Horizontal (16:9)",
-                "Optimized for YouTube and MLS",
-                0.2
+              {hasBothRenders ? (
+                // Legacy: show both but mark the primary
+                <>
+                  {renderFormatCard(
+                    verticalRender,
+                    "vertical",
+                    "Vertical (9:16)",
+                    "Optimized for Reels, TikTok, and Stories",
+                    0.1,
+                    isPortrait
+                  )}
+                  {renderFormatCard(
+                    horizontalRender,
+                    "horizontal",
+                    "Horizontal (16:9)",
+                    "Optimized for YouTube and MLS",
+                    0.2,
+                    !isPortrait
+                  )}
+                </>
+              ) : (
+                // New: show only the matching format
+                renderFormatCard(
+                  primaryRender,
+                  primaryType,
+                  primaryLabel,
+                  primaryDescription,
+                  0.1,
+                  true
+                )
               )}
             </div>
           )}
 
-          {/* Mobile Video Preview — shown inline below format cards */}
+          {/* Mobile Video Preview */}
           {hasVideo && (
             <div className="lg:hidden mt-4">
               <div className="bg-neutral-100 rounded-2xl p-4">
@@ -487,7 +539,7 @@ export default function ResultsPage(): ReactNode {
                 className="inline-flex items-center gap-2 text-xs text-neutral-400 hover:text-neutral-700 disabled:opacity-50 min-h-[44px]"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Regenerate videos with different settings
+                Regenerate video
               </button>
             </div>
           )}
@@ -497,7 +549,7 @@ export default function ResultsPage(): ReactNode {
         <div className="hidden lg:flex w-[45%] shrink-0 bg-neutral-100 rounded-2xl items-center justify-center overflow-hidden">
           {hasVideo ? (
             <motion.div
-              key={activeVideo}
+              key={primaryType}
               className="flex flex-col items-center p-4 w-full h-full justify-center"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -511,7 +563,7 @@ export default function ResultsPage(): ReactNode {
               <p className="text-sm font-medium">
                 {isRendering
                   ? "Video is being rendered..."
-                  : "Select a format to preview"}
+                  : "Video preview will appear here"}
               </p>
             </div>
           )}

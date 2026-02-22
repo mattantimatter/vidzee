@@ -1,7 +1,6 @@
 /**
  * Database types for Vidzee
  */
-
 export type ProjectStatus =
   | "draft"
   | "uploading"
@@ -16,17 +15,14 @@ export type ProjectStatus =
   | "rendering"
   | "complete"
   | "failed";
-
 export type CutLength = "short" | "medium" | "long";
-
 export type RenderType =
   | "scene_clip"
   | "final_vertical"
   | "final_horizontal"
-  | "preview";
-
+  | "preview"
+  | "editor_state";
 export type RenderStatus = "queued" | "running" | "failed" | "done";
-
 export type MotionTemplate =
   | "push_in"
   | "pan_left"
@@ -39,12 +35,21 @@ export type MotionTemplate =
   | "tracking_right"
   | "dolly_back";
 
+// Extended transition types covering all 3 edit styles
 export type TransitionType =
   | "cut"
   | "dissolve"
   | "fade_black"
+  | "fade_white"
   | "wipe_left"
-  | "wipe_right";
+  | "wipe_right"
+  | "zoom_in"
+  | "zoom_out"
+  | "snap_zoom"
+  | "swipe_left"
+  | "swipe_right"
+  | "rotate_cw"
+  | "rotate_ccw";
 
 export type OverlayType =
   | "none"
@@ -53,6 +58,9 @@ export type OverlayType =
   | "price_card"
   | "beds_baths"
   | "outro";
+
+// Task 2: Edit style IDs
+export type EditStyleId = "cinematic" | "real-estate-pro" | "dynamic";
 
 export interface EditorClip {
   id: string;
@@ -85,6 +93,7 @@ export interface EditorState {
   musicVolume: number;
   musicGenre: string;
   totalDuration: number;
+  editStyle?: EditStyleId;
 }
 
 export interface Project {
@@ -178,11 +187,23 @@ export interface StylePackConfig {
     volume: number;
   };
 }
-
 export interface StylePack {
   id: string;
   name: string;
   config: StylePackConfig;
+}
+
+// Task 2: Edit Style definition
+export interface EditStyle {
+  id: EditStyleId;
+  name: string;
+  description: string;
+  accentColor: string;
+  transitions: TransitionType[];
+  defaultTransition: TransitionType;
+  defaultMusicGenre: string;
+  overlayStyle: "cinematic" | "pro" | "dynamic";
+  transitionDuration: number; // seconds
 }
 
 // Cut length scene count ranges
@@ -191,7 +212,53 @@ export const CUT_LENGTH_RANGES: Record<CutLength, { min: number; max: number }> 
   medium: { min: 15, max: 20 },
   long: { min: 21, max: 30 },
 };
-
 export const MAX_VIDEO_DURATION_SEC = 90;
 export const MAX_PHOTOS = 30;
 export const MIN_PHOTOS = 10;
+
+// Credit system types
+export interface CreditBalance {
+  id: string;
+  user_id: string;
+  balance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreditTransaction {
+  id: string;
+  user_id: string;
+  amount: number;
+  type: "purchase" | "usage" | "refund" | "bonus";
+  description: string | null;
+  stripe_session_id: string | null;
+  project_id: string | null;
+  created_at: string;
+}
+
+// Credit pack definitions
+export interface CreditPack {
+  id: string;
+  name: string;
+  credits: number;
+  price: number; // in USD
+  perCredit: number;
+  discount: number; // percentage
+  popular?: boolean;
+}
+
+export const CREDIT_PACKS: CreditPack[] = [
+  { id: "single", name: "Single", credits: 1, price: 12.99, perCredit: 12.99, discount: 0 },
+  { id: "pro5", name: "Pro 5", credits: 5, price: 49.99, perCredit: 10.0, discount: 23, popular: true },
+  { id: "agency15", name: "Agency 15", credits: 15, price: 119.99, perCredit: 8.0, discount: 38 },
+  { id: "enterprise50", name: "Enterprise 50", credits: 50, price: 349.99, perCredit: 7.0, discount: 46 },
+];
+
+/**
+ * Calculate the credit cost for a video based on photo count.
+ * 1 credit = 1 video (up to 15 photos)
+ * 2 credits = 1 video (16-30 photos)
+ */
+export function calculateCreditCost(photoCount: number): number {
+  return photoCount <= 15 ? 1 : 2;
+}

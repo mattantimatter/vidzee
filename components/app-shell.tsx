@@ -8,12 +8,13 @@ import {
   LogOut,
   Menu,
   Plus,
+  Sparkles,
   X,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { VidzeeLogo } from "./vidzee-logo";
 
 const ease = [0.23, 1, 0.32, 1] as const;
@@ -26,6 +27,7 @@ const SIDEBAR_EXPANDED_W = 224; // 14rem
 const iconNavItems = [
   { href: "/app", label: "Dashboard", icon: Home },
   { href: "/app/new", label: "New Project", icon: Plus },
+  { href: "/app/credits", label: "Credits", icon: Sparkles },
 ];
 
 const bottomNavItems = [
@@ -41,6 +43,7 @@ export function AppShell({
 }): ReactNode {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -50,6 +53,22 @@ export function AppShell({
     router.push("/");
     router.refresh();
   };
+
+  // Load credit balance
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/credits");
+        if (res.ok) {
+          const data = await res.json() as { balance: number };
+          setCreditBalance(data.balance);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void load();
+  }, [pathname]); // reload on navigation
 
   const displayName =
     (user.user_metadata?.full_name as string | undefined) ??
@@ -86,6 +105,7 @@ export function AppShell({
               item.href === "/app"
                 ? pathname === "/app"
                 : pathname.startsWith(item.href);
+            const isCredits = item.href === "/app/credits";
             return (
               <Link
                 key={item.href}
@@ -99,13 +119,28 @@ export function AppShell({
                 }`}
                 title={item.label}
               >
-                <item.icon className="w-5 h-5 shrink-0" />
+                <div className="relative shrink-0">
+                  <item.icon className="w-5 h-5 shrink-0" />
+                  {isCredits && creditBalance === 0 && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
+                  )}
+                </div>
                 <span
-                  className="text-sm font-medium whitespace-nowrap transition-opacity duration-200"
+                  className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 flex-1"
                   style={{ opacity: expanded ? 1 : 0, width: expanded ? "auto" : 0 }}
                 >
                   {item.label}
                 </span>
+                {isCredits && expanded && creditBalance !== null && (
+                  <span
+                    className={`text-xs font-bold tabular-nums transition-opacity duration-200 ${
+                      creditBalance === 0 ? "text-red-500" : "text-accent"
+                    }`}
+                    style={{ opacity: expanded ? 1 : 0 }}
+                  >
+                    {creditBalance}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -161,6 +196,13 @@ export function AppShell({
             <span className="font-semibold text-neutral-900 dark:text-white">Vidzee</span>
           </Link>
           <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href="/app/credits"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent/10 text-accent text-xs font-semibold"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              {creditBalance ?? "—"}
+            </Link>
             <Link
               href="/app/new"
               className="w-9 h-9 rounded-lg bg-accent/10 flex items-center justify-center text-accent min-w-[36px]"
@@ -218,6 +260,11 @@ export function AppShell({
                     >
                       <item.icon className="w-4 h-4" />
                       {item.label}
+                      {item.href === "/app/credits" && creditBalance !== null && (
+                        <span className={`ml-auto text-xs font-bold ${creditBalance === 0 ? "text-red-500" : "text-accent"}`}>
+                          {creditBalance}
+                        </span>
+                      )}
                     </Link>
                   );
                 })}

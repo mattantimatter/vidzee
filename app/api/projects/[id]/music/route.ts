@@ -2,6 +2,9 @@
  * POST /api/projects/[id]/music — Generate background music via Fal.ai Beatoven
  * GET  /api/projects/[id]/music?requestId=xxx — Poll for music generation status
  *
+ * Task 1 Fix: Music is generated for the FULL video duration (not per-clip).
+ * The caller calculates total video duration and passes it as `duration`.
+ *
  * Uses the Fal.ai queue pattern:
  * 1. POST to submit → get request_id
  * 2. GET status → check if COMPLETED
@@ -34,8 +37,15 @@ export async function POST(
 
   try {
     const body = await request.json();
-    const genre = body.genre ?? "ambient";
-    const duration = Math.max(15, Math.min(120, body.duration ?? 30));
+    const genre = (body.genre ?? "ambient") as string;
+
+    // Task 1: Accept total video duration from caller.
+    // The editor calculates: sum of (trimEnd - trimStart) for all clips.
+    // Clamp between 15s and 120s (Beatoven API limits).
+    const totalDuration = typeof body.duration === "number" ? body.duration : 30;
+    const duration = Math.max(15, Math.min(120, Math.round(totalDuration)));
+
+    console.log(`[Music] Generating ${duration}s track for genre: ${genre} (requested: ${totalDuration}s)`);
 
     // Build the prompt based on genre
     const genrePrompts: Record<string, string> = {
@@ -47,10 +57,14 @@ export async function POST(
         "Upbeat electronic background music for a modern real estate property showcase, energetic but not overwhelming, clean production, contemporary feel",
       acoustic:
         "Warm acoustic guitar background music for a cozy real estate home tour, inviting, friendly, natural feel, light percussion",
+      "cinematic Piano":
+        "Cinematic piano background music for an upscale real estate property tour, emotional, elegant, inspiring, soft strings accompaniment",
     };
 
+    const normalizedGenre = genre.toLowerCase();
     const prompt =
       genrePrompts[genre] ??
+      genrePrompts[normalizedGenre] ??
       "Background music for a real estate property video tour, elegant and professional";
 
     // Submit to Fal.ai queue
@@ -93,6 +107,7 @@ export async function POST(
         return NextResponse.json({
           status: "completed",
           audioUrl,
+          duration,
         });
       }
 
@@ -105,6 +120,7 @@ export async function POST(
     return NextResponse.json({
       status: "pending",
       requestId,
+      duration,
     });
   } catch (err) {
     console.error("[Music] Error:", err);

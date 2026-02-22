@@ -404,17 +404,21 @@ ADDITIONAL RULES:
 - Create ${params.sceneRange.min} to ${params.sceneRange.max} scenes for a "${params.cutLength}" cut
 - Vary motion templates for visual interest (don't repeat the same motion more than 2 times in a row)
 - Available motion templates: push_in, pan_left, pan_right, tilt_up, tilt_down, orbit, crane_up, tracking_left, tracking_right, dolly_back
-- Recommended motion templates per room type:
-  • Exterior/aerial: "pan_left" or "pan_right" or "orbit" (sweeping reveal)
-  • Entry/foyer: "push_in" or "tracking_right" (welcoming forward motion)
-  • Living room/great room: "pan_left" or "orbit" or "tracking_left" (showcase the space)
-  • Kitchen: "tracking_right" or "push_in" (follow the countertop line)
-  • Dining room: "orbit" or "pan_left" (reveal the table setting)
-  • Bedrooms: "push_in" or "dolly_back" (intimate, inviting)
-  • Bathrooms: "tilt_up" or "crane_up" (reveal fixtures)
-  • Backyard/pool: "pan_left" or "crane_up" or "dolly_back" (reveal the outdoor space)
-  • Garage/utility: "tracking_left" or "push_in" (functional reveal)
-  • Pool/garden: "orbit" or "crane_up" (dramatic reveal)
+- CRITICAL: Camera motion MUST be continuous throughout the ENTIRE clip duration from first frame to last frame. The camera must NEVER stop moving, pause, or go static at any point during the clip. This is the most important requirement for motion templates.
+- Recommended motion templates per room type (choose the BEST match for continuous motion):
+  • Exterior/aerial: "orbit" or "pan_left" or "pan_right" — continuous sweeping reveal showing the full property
+  • Entry/foyer: "push_in" or "tracking_right" — continuous welcoming forward motion revealing the space
+  • Living room/great room: "orbit" or "crane_up" or "pan_left" — continuous motion showcasing the room's depth and open space
+  • Kitchen: "tracking_right" or "push_in" — continuous motion following the countertop line, revealing architectural details
+  • Dining room: "orbit" or "pan_left" — continuous circular or sweeping motion revealing the table setting
+  • Primary suite: "push_in" or "dolly_back" — continuous intimate motion revealing the bedroom's luxury
+  • Primary bathroom: "tilt_up" or "crane_up" — continuous vertical reveal of fixtures and architectural details
+  • Secondary bedrooms: "push_in" or "pan_left" — continuous motion showcasing the room
+  • Bathrooms/small rooms: "pan_left" or "tilt_up" — continuous slow pan for compact spaces
+  • Hallways/long rooms: "push_in" or "tracking_right" — continuous forward motion revealing depth
+  • Backyard/pool: "orbit" or "dolly_back" or "crane_up" — continuous dramatic reveal of outdoor space
+  • Garage/utility: "tracking_left" or "push_in" — continuous functional reveal
+  • Pool/garden: "orbit" or "crane_up" — continuous dramatic circular or rising reveal
 - Write short, elegant captions suitable for real estate video overlays (e.g., "Sun-Drenched Living Room", "Chef's Kitchen with Quartz Island", "Resort-Style Pool & Patio")
 - Style pack: "${params.stylePackId}"
 - IMPORTANT: Use the exact asset IDs provided — do not invent new IDs
