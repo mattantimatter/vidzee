@@ -2,7 +2,8 @@
  * POST /api/stripe/webhook
  *
  * Handles Stripe webhook events.
- * On checkout.session.completed → add credits to user's balance.
+ * On checkout.session.completed → add credits to user's metadata balance.
+ * Uses user metadata instead of a credits DB table.
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -48,45 +49,50 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Missing metadata" }, { status: 400 });
       }
 
-      // Add credits to user's balance
-      const supabase = createClient(
+      // Update user metadata with new credits
+      const admin = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
         { auth: { autoRefreshToken: false, persistSession: false } }
       );
 
-      // Upsert credits balance
-      const { data: existing } = await supabase
-        .from("credits")
-        .select("id, balance")
-        .eq("user_id", userId)
-        .single();
-
-      if (existing) {
-        await supabase
-          .from("credits")
-          .update({
-            balance: existing.balance + credits,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", existing.id);
-      } else {
-        await supabase.from("credits").insert({
-          user_id: userId,
-          balance: credits,
-        });
+      // Get current user metadata
+      const { data: fullUser, error: userErr } = await admin.auth.admin.getUserById(userId);
+      if (userErr || !fullUser) {
+        console.error("[Stripe Webhook] Failed to get user:", userErr);
+        return NextResponse.json({ error: "User not found" }, { status: 400 });
       }
 
-      // Log transaction
-      await supabase.from("credit_transactions").insert({
-        user_id: userId,
+      const meta = (fullUser.user.user_metadata ?? {}) as Record<string, unknown>;
+      const currentBalance: number = typeof meta.credits === "number" ? meta.credits : 0;
+      const newBalance = currentBalance + credits;
+
+      const newTransaction = {
+        id: crypto.randomUUID(),
         amount: credits,
         type: "purchase",
         description: `Purchased ${credits} credit${credits > 1 ? "s" : ""} (${packId} pack)`,
         stripe_session_id: session.id,
+        created_at: new Date().toISOString(),
+      };
+
+      const history: unknown[] = Array.isArray(meta.credit_history) ? meta.credit_history : [];
+      const updatedHistory = [newTransaction, ...history].slice(0, 20);
+
+      const { error: updateErr } = await admin.auth.admin.updateUserById(userId, {
+        user_metadata: {
+          ...meta,
+          credits: newBalance,
+          credit_history: updatedHistory,
+        },
       });
 
-      console.log(`[Stripe Webhook] Added ${credits} credits to user ${userId}`);
+      if (updateErr) {
+        console.error("[Stripe Webhook] Failed to update user credits:", updateErr);
+        return NextResponse.json({ error: "Failed to update credits" }, { status: 500 });
+      }
+
+      console.log(`[Stripe Webhook] Added ${credits} credits to user ${userId} (new balance: ${newBalance})`);
     }
 
     return NextResponse.json({ received: true });
