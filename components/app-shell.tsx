@@ -88,7 +88,7 @@ export function AppShell({
         style={{ width: sidebarW }}
       >
         {/* Logo */}
-        <Link href="/" className={`flex items-center gap-2.5 mb-6 h-9 ${expanded ? "px-3" : "justify-center px-0"}`}>
+        <Link href="/" className={`flex items-center gap-2.5 mb-6 h-9 ${expanded ? "px-3" : "justify-center w-full"}`}>
           <VidzeeLogo className="w-8 h-8 shrink-0 text-accent" />
           <span
             className="text-base font-semibold text-neutral-900 dark:text-white whitespace-nowrap transition-opacity duration-200"
