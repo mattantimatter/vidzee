@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
   },
   productionBrowserSourceMaps: false,
   // Prevent Next.js from bundling ffmpeg-static binary into the serverless function
-  serverExternalPackages: ["ffmpeg-static"],
+  serverExternalPackages: ["ffmpeg-static", "pg"],
 };
 
 export default nextConfig;
