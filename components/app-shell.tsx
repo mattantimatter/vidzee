@@ -88,18 +88,26 @@ export function AppShell({
         style={{ width: sidebarW }}
       >
         {/* Logo */}
-        <Link href="/" className={`flex items-center gap-2.5 mb-6 h-9 ${expanded ? "px-3" : "justify-center w-full"}`}>
+        <Link
+          href="/"
+          className={`flex items-center mb-6 h-9 ${
+            expanded ? "gap-2.5 px-3" : "justify-center w-full"
+          }`}
+        >
           <VidzeeLogo className="w-8 h-8 shrink-0 text-accent" />
           <span
-            className="text-base font-semibold text-neutral-900 dark:text-white whitespace-nowrap transition-opacity duration-200"
-            style={{ opacity: expanded ? 1 : 0 }}
+            className="text-base font-semibold text-neutral-900 dark:text-white whitespace-nowrap transition-opacity duration-200 overflow-hidden"
+            style={{
+              opacity: expanded ? 1 : 0,
+              width: expanded ? "auto" : 0,
+            }}
           >
             Vidzee
           </span>
         </Link>
 
         {/* Main nav icons */}
-        <nav className={`flex flex-col gap-1 flex-1 ${expanded ? "px-2" : "px-1"}`}>
+        <nav className={`flex flex-col gap-1 flex-1 ${expanded ? "px-2" : "px-0"}`}>
           {iconNavItems.map((item) => {
             const isActive =
               item.href === "/app"
@@ -110,8 +118,10 @@ export function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
-                className={`group relative flex items-center gap-3 h-10 rounded-xl transition-colors overflow-hidden ${
-                  expanded ? "px-3" : "justify-center px-0 w-10 mx-auto"
+                className={`group relative flex items-center transition-colors overflow-hidden ${
+                  expanded
+                    ? "gap-3 h-10 rounded-xl px-3"
+                    : "w-10 h-10 rounded-lg mx-auto justify-center"
                 } ${
                   isActive
                     ? "bg-accent/10 text-accent"
@@ -126,8 +136,11 @@ export function AppShell({
                   )}
                 </div>
                 <span
-                  className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 flex-1"
-                  style={{ opacity: expanded ? 1 : 0, width: expanded ? "auto" : 0 }}
+                  className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 flex-1 overflow-hidden"
+                  style={{
+                    opacity: expanded ? 1 : 0,
+                    width: expanded ? "auto" : 0,
+                  }}
                 >
                   {item.label}
                 </span>
@@ -147,20 +160,25 @@ export function AppShell({
         </nav>
 
         {/* Bottom icons */}
-        <div className={`flex flex-col gap-1 mt-auto ${expanded ? "px-2" : "px-1"}`}>
+        <div className={`flex flex-col gap-1 mt-auto ${expanded ? "px-2" : "px-0"}`}>
           {bottomNavItems.map((item) => (
             <Link
               key={item.label}
               href={item.href}
-              className={`flex items-center gap-3 h-10 rounded-xl text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors overflow-hidden ${
-                expanded ? "px-3" : "justify-center px-0 w-10 mx-auto"
+              className={`flex items-center transition-colors overflow-hidden text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+                expanded
+                  ? "gap-3 h-10 rounded-xl px-3"
+                  : "w-10 h-10 rounded-lg mx-auto justify-center"
               }`}
               title={item.label}
             >
               <item.icon className="w-5 h-5 shrink-0" />
               <span
-                className="text-sm font-medium whitespace-nowrap transition-opacity duration-200"
-                style={{ opacity: expanded ? 1 : 0, width: expanded ? "auto" : 0 }}
+                className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 overflow-hidden"
+                style={{
+                  opacity: expanded ? 1 : 0,
+                  width: expanded ? "auto" : 0,
+                }}
               >
                 {item.label}
               </span>
@@ -170,8 +188,10 @@ export function AppShell({
           {/* Sign out */}
           <button
             onClick={handleSignOut}
-            className={`flex items-center gap-3 h-10 rounded-xl text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors overflow-hidden ${
-              expanded ? "px-3" : "justify-center px-0 w-10 mx-auto"
+            className={`flex items-center transition-colors overflow-hidden text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+              expanded
+                ? "gap-3 h-10 rounded-xl px-3"
+                : "w-10 h-10 rounded-lg mx-auto justify-center"
             }`}
             title={`Sign out (${displayName})`}
           >
@@ -179,8 +199,11 @@ export function AppShell({
               {displayName.charAt(0).toUpperCase()}
             </div>
             <span
-              className="text-sm font-medium whitespace-nowrap transition-opacity duration-200"
-              style={{ opacity: expanded ? 1 : 0, width: expanded ? "auto" : 0 }}
+              className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 overflow-hidden"
+              style={{
+                opacity: expanded ? 1 : 0,
+                width: expanded ? "auto" : 0,
+              }}
             >
               Sign out
             </span>
