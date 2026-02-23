@@ -123,7 +123,7 @@ export default function ResultsPage(): ReactNode {
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(async () => {
-    const [projectRes, rendersRes] = await Promise.all([
+    const [projectRes, rendersRes, clipRendersRes] = await Promise.all([
       supabase.from("projects").select("*").eq("id", projectId).single(),
       supabase
         .from("renders")
@@ -131,9 +131,26 @@ export default function ResultsPage(): ReactNode {
         .eq("project_id", projectId)
         .in("type", ["final_vertical", "final_horizontal", "preview"])
         .order("created_at"),
+      // Fetch one scene_clip render to infer video_format if not on project
+      supabase
+        .from("renders")
+        .select("input_refs")
+        .eq("project_id", projectId)
+        .eq("type", "scene_clip")
+        .limit(1),
     ]);
 
-    if (projectRes.data) setProject(projectRes.data as Project);
+    if (projectRes.data) {
+      const proj = projectRes.data as Project & { video_format?: string | null };
+      // If video_format column missing from project, infer from scene_clip input_refs
+      if (!proj.video_format && clipRendersRes.data && clipRendersRes.data.length > 0) {
+        const clipRefs = (clipRendersRes.data[0] as { input_refs?: Record<string, unknown> | null }).input_refs;
+        if (clipRefs?.video_format) {
+          (proj as unknown as Record<string, unknown>).video_format = clipRefs.video_format as string;
+        }
+      }
+      setProject(proj);
+    }
     if (rendersRes.data) setRenders(rendersRes.data as Render[]);
     setLoading(false);
   }, [projectId, supabase]);

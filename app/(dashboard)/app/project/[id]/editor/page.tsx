@@ -257,13 +257,20 @@ export default function EditorPage(): ReactNode {
     const proj = projectRes.data as Project | null;
     setProject(proj);
 
-    // Task 7: Load video format from project
-    const fmt = (proj as Record<string, unknown> | null)?.video_format as string | null | undefined;
-    setVideoFormat(fmt === "9:16" ? "9:16" : "16:9");
-
     const scenes = (scenesRes.data ?? []) as StoryboardScene[];
     const assets = (assetsRes.data ?? []) as Asset[];
     const renders = (rendersRes.data ?? []) as Render[];
+
+    // Task 7: Load video format from project (column may not exist yet)
+    let fmt = (proj as Record<string, unknown> | null)?.video_format as string | null | undefined;
+    if (!fmt && renders.length > 0) {
+      // Infer from the first scene_clip render's input_refs.video_format
+      const firstClipRefs = renders[0]?.input_refs as Record<string, unknown> | null | undefined;
+      if (firstClipRefs?.video_format) {
+        fmt = firstClipRefs.video_format as string;
+      }
+    }
+    setVideoFormat(fmt === "9:16" ? "9:16" : "16:9");
 
     const savedState = editorStateRes.data?.input_refs as EditorState | null;
 

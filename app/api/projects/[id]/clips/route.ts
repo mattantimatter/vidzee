@@ -241,6 +241,7 @@ export async function POST(
               scene_id: scene.id as string,
               asset_id: assetId,
               image_url: imageUrl,
+              video_format: aspectRatio,
             },
           })
           .select()
