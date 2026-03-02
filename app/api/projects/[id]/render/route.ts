@@ -257,6 +257,7 @@ export async function POST(
 
       for (let i = 0; i < orderedClips.length; i++) {
         const clip = orderedClips[i];
+        if (!clip) continue;
         const outputPath = clip.output_path as string;
         if (!outputPath) continue;
 
