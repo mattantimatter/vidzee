@@ -2,7 +2,6 @@
 
 import { ArrowDownRight } from "lucide-react";
 import { motion, useMotionValue, useSpring } from "motion/react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRef, type ReactNode, type MouseEvent } from "react";
 
@@ -148,14 +147,14 @@ export function Hero(): ReactNode {
         transition={{ duration: 1, delay: 0.6, ease }}
       >
         <div className="relative max-w-5xl mx-auto">
-          <div className="relative dark:mix-blend-darken rounded-2xl overflow-hidden border border-neutral-200 shadow-2xl/5 mask-[linear-gradient(to_bottom,black_50%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_50%,transparent_100%)]">
-            <Image
-              src="/dashboardmock.png"
-              alt="Vidzee dashboard preview"
-              width={1920}
-              height={1080}
-              className="w-full h-auto invert dark:invert-0 dark:contrast-100 contrast-125"
-              priority
+          <div className="relative rounded-2xl overflow-hidden border border-neutral-200 shadow-2xl/5 mask-[linear-gradient(to_bottom,black_60%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,black_60%,transparent_100%)]">
+            <video
+              src="/hero-demo.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="w-full h-auto"
             />
           </div>
         </div>

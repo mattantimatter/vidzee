@@ -130,7 +130,7 @@ export default function ResultsPage(): ReactNode {
         .select("*")
         .eq("project_id", projectId)
         .in("type", ["final_vertical", "final_horizontal", "preview"])
-        .order("created_at"),
+        .order("created_at", { ascending: false }),
       // Fetch one scene_clip render to infer video_format if not on project
       supabase
         .from("renders")

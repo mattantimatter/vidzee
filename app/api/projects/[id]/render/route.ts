@@ -126,6 +126,30 @@ export async function POST(
     );
   }
 
+  // Load saved editor state (if any) to respect user's clip order and trim points
+  const { data: editorStateRow } = await admin
+    .from("renders")
+    .select("input_refs")
+    .eq("project_id", projectId)
+    .eq("type", "editor_state")
+    .limit(1)
+    .single();
+
+  interface EditorClipState {
+    id: string;
+    clipUrl?: string;
+    order: number;
+    trimStart: number;
+    trimEnd: number;
+    duration: number;
+  }
+  interface SavedEditorState {
+    clips?: EditorClipState[];
+    totalDuration?: number;
+  }
+  const savedEditorState = editorStateRow?.input_refs as SavedEditorState | null;
+  const hasEditorState = !!(savedEditorState?.clips && savedEditorState.clips.length > 0);
+
   // Get all completed scene clips
   const { data: sceneClips, error: clipsError } = await admin
     .from("renders")
@@ -142,37 +166,69 @@ export async function POST(
     );
   }
 
-  // Get scenes for ordering
-  const { data: scenes } = await admin
-    .from("storyboard_scenes")
-    .select("*")
-    .eq("project_id", projectId)
-    .eq("include", true)
-    .order("scene_order");
-
-  // Sort clips by scene order
-  const sceneOrderMap = new Map<string, number>();
-  if (scenes) {
-    for (const scene of scenes) {
-      sceneOrderMap.set(scene.id as string, scene.scene_order as number);
-    }
+  // Build a map from render ID → scene clip for editor state lookup
+  const clipById = new Map<string, Record<string, unknown>>();
+  for (const clip of sceneClips) {
+    clipById.set(clip.id as string, clip as Record<string, unknown>);
   }
 
-  const orderedClips = [...sceneClips].sort((a, b) => {
-    const aRefs = a.input_refs as Record<string, string> | null;
-    const bRefs = b.input_refs as Record<string, string> | null;
-    const aOrder = sceneOrderMap.get(aRefs?.scene_id ?? "") ?? 999;
-    const bOrder = sceneOrderMap.get(bRefs?.scene_id ?? "") ?? 999;
-    return aOrder - bOrder;
-  });
+  // Determine clip order and trim points
+  // If editor state exists, use it; otherwise fall back to scene order from DB
+  let orderedClips: Array<Record<string, unknown> & { _trimStart?: number; _trimEnd?: number }>;
+
+  if (hasEditorState && savedEditorState?.clips) {
+    console.log(`[Render] Using saved editor state: ${savedEditorState.clips.length} clips in editor order`);
+    orderedClips = savedEditorState.clips
+      .sort((a, b) => a.order - b.order)
+      .map((editorClip) => {
+        const dbClip = clipById.get(editorClip.id);
+        if (!dbClip) return null;
+        return {
+          ...dbClip,
+          _trimStart: editorClip.trimStart ?? 0,
+          _trimEnd: editorClip.trimEnd ?? (dbClip.duration_sec as number) ?? 3,
+        };
+      })
+      .filter((c): c is Record<string, unknown> & { _trimStart: number; _trimEnd: number } => c !== null);
+  } else {
+    // Fall back to scene order from storyboard
+    const { data: scenes } = await admin
+      .from("storyboard_scenes")
+      .select("*")
+      .eq("project_id", projectId)
+      .eq("include", true)
+      .order("scene_order");
+
+    const sceneOrderMap = new Map<string, number>();
+    if (scenes) {
+      for (const scene of scenes) {
+        sceneOrderMap.set(scene.id as string, scene.scene_order as number);
+      }
+    }
+
+    orderedClips = [...sceneClips]
+      .sort((a, b) => {
+        const aRefs = a.input_refs as Record<string, string> | null;
+        const bRefs = b.input_refs as Record<string, string> | null;
+        const aOrder = sceneOrderMap.get(aRefs?.scene_id ?? "") ?? 999;
+        const bOrder = sceneOrderMap.get(bRefs?.scene_id ?? "") ?? 999;
+        return aOrder - bOrder;
+      })
+      .map((c) => ({
+        ...c as Record<string, unknown>,
+        _trimStart: 0,
+        _trimEnd: (c.duration_sec as number) ?? 3,
+      }));
+  }
 
   console.log(`[Render] Found ${orderedClips.length} scene clips to concatenate`);
 
-  // Calculate total duration from clips
-  const totalDuration = orderedClips.reduce(
-    (sum, c) => sum + ((c.duration_sec as number) ?? 3),
-    0
-  );
+  // Calculate total duration from clips (using trim points)
+  const totalDuration = orderedClips.reduce((sum, c) => {
+    const start = c._trimStart ?? 0;
+    const end = c._trimEnd ?? (c.duration_sec as number) ?? 3;
+    return sum + (end - start);
+  }, 0);
 
   // Mark all final renders as running
   for (const render of finalRenders) {
@@ -195,7 +251,7 @@ export async function POST(
     try {
       await fs.mkdir(tmpDir, { recursive: true });
 
-      // Download all clips
+      // Download all clips and apply trim points
       console.log(`[Render] Downloading ${orderedClips.length} clips...`);
       const clipPaths: string[] = [];
 
@@ -204,9 +260,10 @@ export async function POST(
         const outputPath = clip.output_path as string;
         if (!outputPath) continue;
 
-        const clipFile = path.join(tmpDir, `clip_${String(i).padStart(3, "0")}.mp4`);
+        const rawFile = path.join(tmpDir, `raw_${String(i).padStart(3, "0")}.mp4`);
+        const trimmedFile = path.join(tmpDir, `clip_${String(i).padStart(3, "0")}.mp4`);
 
-        // Download via public URL (faster than Supabase SDK download)
+        // Download via public URL
         const clipUrl = `${supabaseUrl}/storage/v1/object/public/scene-clips/${outputPath}`;
         const res = await fetch(clipUrl);
         if (!res.ok) {
@@ -215,9 +272,29 @@ export async function POST(
         }
 
         const buffer = Buffer.from(await res.arrayBuffer());
-        await fs.writeFile(clipFile, buffer);
-        clipPaths.push(clipFile);
+        await fs.writeFile(rawFile, buffer);
         console.log(`[Render] Downloaded clip ${i + 1}/${orderedClips.length} (${(buffer.length / 1024).toFixed(0)}KB)`);
+
+        // Apply trim if needed (editor state trim points differ from full duration)
+        const trimStart = clip._trimStart ?? 0;
+        const trimEnd = clip._trimEnd ?? (clip.duration_sec as number) ?? 3;
+        const fullDuration = (clip.duration_sec as number) ?? 3;
+        const needsTrim = trimStart > 0.05 || trimEnd < fullDuration - 0.05;
+
+        if (needsTrim) {
+          console.log(`[Render] Trimming clip ${i + 1}: ${trimStart.toFixed(2)}s → ${trimEnd.toFixed(2)}s`);
+          await execFileAsync(ffmpegPath, [
+            "-y",
+            "-ss", trimStart.toFixed(3),
+            "-to", trimEnd.toFixed(3),
+            "-i", rawFile,
+            "-c", "copy",
+            trimmedFile,
+          ], { timeout: 15000, maxBuffer: 10 * 1024 * 1024 });
+          clipPaths.push(trimmedFile);
+        } else {
+          clipPaths.push(rawFile);
+        }
       }
 
       if (clipPaths.length === 0) {

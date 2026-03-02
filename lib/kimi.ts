@@ -605,7 +605,7 @@ export async function generateEditPlan(params: {
     .filter(Boolean)
     .join("\n");
 
-  const systemPrompt = `You are a professional video editor creating an edit plan for a real estate listing video.
+  const systemPrompt = `You are a professional video editor creating an edit plan for a clean, cinematic real estate listing video.
 
 You MUST respond with valid JSON matching this exact schema:
 {
@@ -614,20 +614,19 @@ You MUST respond with valid JSON matching this exact schema:
     "clip_id": "uuid",
     "start_sec": 0.0,
     "end_sec": 3.0,
-    "transition": "dissolve|cut|whip_pan|fade_black|zoom_through",
-    "overlay_type": "none|intro|lower_third|price_card|beds_baths|outro",
-    "overlay_text": "optional text for overlay"
+    "transition": "dissolve|cut",
+    "overlay_type": "none",
+    "overlay_text": ""
   }],
   "total_duration_sec": 45.0,
   "music_track": "ambient_modern"
 }
 
 Rules:
-- Use the first scene for an intro overlay with the property title/address
-- Add a price card overlay early in the video (scene 2-4)
-- Add beds/baths overlay in the middle
-- Use the last scene for an outro with agent info
-- Vary transitions based on the style pack "${params.stylePackId}"
+- Use ONLY "dissolve" or "cut" transitions — no other transition types
+- Set overlay_type to "none" for ALL segments — text overlays will be added later by the editor
+- Leave overlay_text empty for all segments
+- Keep transitions clean and simple: prefer "dissolve" between most clips, use "cut" for a faster pace when appropriate
 - Keep total duration reasonable (30-90 seconds)`;
 
   const userPrompt = `Create an edit plan for this property video.

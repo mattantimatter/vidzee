@@ -321,83 +321,8 @@ export default function EditorPage(): ReactNode {
 
       setClips(editorClips);
 
-      // Auto-generate default overlays
-      const defaultOverlays: EditorOverlay[] = [];
-      if (editorClips.length > 0 && proj) {
-        const firstClip = editorClips[0];
-        if (firstClip) {
-          defaultOverlays.push({
-            id: `overlay-intro-${firstClip.id}`,
-            clipId: firstClip.id,
-            type: "intro",
-            text: proj.title ?? proj.address ?? "Property Tour",
-            startSec: 0,
-            durationSec: firstClip.duration,
-          });
-        }
-
-        if (editorClips.length > 1 && proj.price) {
-          const secondClip = editorClips[1];
-          if (secondClip) {
-            defaultOverlays.push({
-              id: `overlay-price-${secondClip.id}`,
-              clipId: secondClip.id,
-              type: "price_card",
-              text: `$${proj.price.toLocaleString()}`,
-              startSec: 0,
-              durationSec: secondClip.duration,
-            });
-          }
-        }
-
-        if (editorClips.length > 2 && (proj.beds ?? proj.baths)) {
-          const thirdClip = editorClips[2];
-          if (thirdClip) {
-            defaultOverlays.push({
-              id: `overlay-bb-${thirdClip.id}`,
-              clipId: thirdClip.id,
-              type: "beds_baths",
-              text: [
-                proj.beds ? `${proj.beds} Beds` : null,
-                proj.baths ? `${proj.baths} Baths` : null,
-                proj.sqft ? `${proj.sqft.toLocaleString()} Sq Ft` : null,
-              ]
-                .filter(Boolean)
-                .join(" · "),
-              startSec: 0,
-              durationSec: thirdClip.duration,
-            });
-          }
-        }
-
-        for (let i = 3; i < editorClips.length; i++) {
-          const clip = editorClips[i];
-          if (clip && clip.caption) {
-            defaultOverlays.push({
-              id: `overlay-lt-${clip.id}`,
-              clipId: clip.id,
-              type: "lower_third",
-              text: clip.caption,
-              startSec: 0,
-              durationSec: clip.duration,
-            });
-          }
-        }
-
-        const lastClip = editorClips[editorClips.length - 1];
-        if (lastClip && proj.agent_name) {
-          defaultOverlays.push({
-            id: `overlay-outro-${lastClip.id}`,
-            clipId: lastClip.id,
-            type: "outro",
-            text: [proj.agent_name, proj.brokerage].filter(Boolean).join(" · "),
-            startSec: 0,
-            durationSec: lastClip.duration,
-          });
-        }
-      }
-
-      setOverlays(defaultOverlays);
+      // Default to no overlays — user can add text overlays manually
+      setOverlays([]);
     }
 
     setLoading(false);
