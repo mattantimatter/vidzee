@@ -248,8 +248,6 @@ export interface CreditPack {
   description: string; // use-case copy for card
 }
 
-const SINGLE_CREDIT_PRICE = 19;
-
 export const CREDIT_PACKS: CreditPack[] = [
   {
     id: "starter",
