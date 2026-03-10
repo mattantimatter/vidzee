@@ -236,22 +236,58 @@ export interface CreditTransaction {
   created_at: string;
 }
 
-// Credit pack definitions
+// Credit pack definitions (pricing targets ~$14–$20 per short 10–15 photo video)
 export interface CreditPack {
   id: string;
   name: string;
   credits: number;
   price: number; // in USD
   perCredit: number;
-  discount: number; // percentage
+  discount: number; // percentage vs single-credit price
   popular?: boolean;
+  description: string; // use-case copy for card
 }
 
+const SINGLE_CREDIT_PRICE = 19;
+
 export const CREDIT_PACKS: CreditPack[] = [
-  { id: "single", name: "Single", credits: 1, price: 12.99, perCredit: 12.99, discount: 0 },
-  { id: "pro5", name: "Pro 5", credits: 5, price: 49.99, perCredit: 10.0, discount: 23, popular: true },
-  { id: "agency15", name: "Agency 15", credits: 15, price: 119.99, perCredit: 8.0, discount: 38 },
-  { id: "enterprise50", name: "Enterprise 50", credits: 50, price: 349.99, perCredit: 7.0, discount: 46 },
+  {
+    id: "starter",
+    name: "Starter",
+    credits: 1,
+    price: 19,
+    perCredit: 19,
+    discount: 0,
+    description: "Perfect for testing one property video.",
+  },
+  {
+    id: "pro",
+    name: "Pro Pack",
+    credits: 5,
+    price: 79,
+    perCredit: 15.8,
+    discount: 17,
+    popular: true,
+    description: "Great for active agents creating multiple listings each month.",
+  },
+  {
+    id: "agent",
+    name: "Agent Pack",
+    credits: 10,
+    price: 149,
+    perCredit: 14.9,
+    discount: 22,
+    description: "Built for agents and small teams with steady listing volume.",
+  },
+  {
+    id: "team",
+    name: "Team",
+    credits: 25,
+    price: 349,
+    perCredit: 13.96,
+    discount: 27,
+    description: "Best for brokerages and high-volume marketing workflows.",
+  },
 ];
 
 /**

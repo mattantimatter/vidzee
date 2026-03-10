@@ -87,26 +87,28 @@ export function AppShell({
         className="hidden md:flex fixed top-0 left-0 h-screen flex-col border-r border-border bg-white dark:bg-neutral-900 py-4 shrink-0 overflow-hidden z-40 transition-all duration-300 ease-in-out"
         style={{ width: sidebarW }}
       >
-        {/* Logo */}
+        {/* Logo — collapsed: centered in fixed square hit area */}
         <Link
           href="/"
           className={`flex items-center mb-6 h-9 ${
-            expanded ? "gap-2.5 px-3" : "justify-center w-full"
+            expanded ? "gap-2.5 px-3 min-w-0" : "w-10 h-9 min-w-[2.5rem] rounded-xl mx-auto justify-center shrink-0"
           }`}
         >
-          <VidzeeLogo className="w-8 h-8 shrink-0 text-accent" />
-          <span
-            className="text-base font-semibold text-neutral-900 dark:text-white whitespace-nowrap transition-opacity duration-200 overflow-hidden"
-            style={{
-              opacity: expanded ? 1 : 0,
-              width: expanded ? "auto" : 0,
-            }}
-          >
-            Vidzee
-          </span>
+          {expanded ? (
+            <>
+              <VidzeeLogo className="w-8 h-8 shrink-0 text-accent" aria-hidden />
+              <span className="text-base font-semibold text-neutral-900 dark:text-white whitespace-nowrap flex-1 overflow-hidden min-w-0">
+                Vidzee
+              </span>
+            </>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <VidzeeLogo className="w-8 h-8 shrink-0 text-accent" aria-hidden />
+            </div>
+          )}
         </Link>
 
-        {/* Main nav icons */}
+        {/* Main nav icons — collapsed: fixed square hit area, icon centered via flex */}
         <nav className={`flex flex-col gap-1 flex-1 ${expanded ? "px-2" : "px-0"}`}>
           {iconNavItems.map((item) => {
             const isActive =
@@ -120,8 +122,8 @@ export function AppShell({
                 href={item.href}
                 className={`group relative flex items-center transition-colors overflow-hidden ${
                   expanded
-                    ? "gap-3 h-10 rounded-xl px-3"
-                    : "w-10 h-10 rounded-lg mx-auto justify-center"
+                    ? "gap-3 h-10 rounded-xl px-3 min-w-0"
+                    : "w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] rounded-xl mx-auto flex items-center justify-center shrink-0"
                 } ${
                   isActive
                     ? "bg-accent/10 text-accent"
@@ -129,37 +131,41 @@ export function AppShell({
                 }`}
                 title={item.label}
               >
-                <div className="relative shrink-0">
-                  <item.icon className="w-5 h-5 shrink-0" />
-                  {isCredits && creditBalance === 0 && (
-                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" />
-                  )}
-                </div>
-                <span
-                  className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 flex-1 overflow-hidden"
-                  style={{
-                    opacity: expanded ? 1 : 0,
-                    width: expanded ? "auto" : 0,
-                  }}
-                >
-                  {item.label}
-                </span>
-                {isCredits && expanded && creditBalance !== null && (
-                  <span
-                    className={`text-xs font-bold tabular-nums transition-opacity duration-200 ${
-                      creditBalance === 0 ? "text-red-500" : "text-accent"
-                    }`}
-                    style={{ opacity: expanded ? 1 : 0 }}
-                  >
-                    {creditBalance}
-                  </span>
+                {expanded ? (
+                  <>
+                    <div className="relative shrink-0 flex items-center justify-center w-5 h-5">
+                      <item.icon className="w-5 h-5 shrink-0" aria-hidden />
+                      {isCredits && creditBalance === 0 && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-red-500" aria-hidden />
+                      )}
+                    </div>
+                    <span className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 flex-1 overflow-hidden min-w-0">
+                      {item.label}
+                    </span>
+                    {isCredits && creditBalance !== null && (
+                      <span
+                        className={`text-xs font-bold tabular-nums shrink-0 ${
+                          creditBalance === 0 ? "text-red-500" : "text-accent"
+                        }`}
+                      >
+                        {creditBalance}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center shrink-0">
+                    <item.icon className="w-5 h-5 shrink-0" aria-hidden />
+                    {isCredits && creditBalance === 0 && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" aria-hidden />
+                    )}
+                  </div>
                 )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Bottom icons */}
+        {/* Bottom icons — same collapsed centering as main nav */}
         <div className={`flex flex-col gap-1 mt-auto ${expanded ? "px-2" : "px-0"}`}>
           {bottomNavItems.map((item) => (
             <Link
@@ -167,46 +173,53 @@ export function AppShell({
               href={item.href}
               className={`flex items-center transition-colors overflow-hidden text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
                 expanded
-                  ? "gap-3 h-10 rounded-xl px-3"
-                  : "w-10 h-10 rounded-lg mx-auto justify-center"
+                  ? "gap-3 h-10 rounded-xl px-3 min-w-0"
+                  : "w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] rounded-xl mx-auto flex items-center justify-center shrink-0"
               }`}
               title={item.label}
             >
-              <item.icon className="w-5 h-5 shrink-0" />
-              <span
-                className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 overflow-hidden"
-                style={{
-                  opacity: expanded ? 1 : 0,
-                  width: expanded ? "auto" : 0,
-                }}
-              >
-                {item.label}
-              </span>
+              {expanded ? (
+                <>
+                  <item.icon className="w-5 h-5 shrink-0" aria-hidden />
+                  <span className="text-sm font-medium whitespace-nowrap flex-1 overflow-hidden min-w-0">
+                    {item.label}
+                  </span>
+                </>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center shrink-0">
+                  <item.icon className="w-5 h-5 shrink-0" aria-hidden />
+                </div>
+              )}
             </Link>
           ))}
 
           {/* Sign out */}
           <button
+            type="button"
             onClick={handleSignOut}
-            className={`flex items-center transition-colors overflow-hidden text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
+            className={`flex items-center transition-colors overflow-hidden text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 w-full ${
               expanded
-                ? "gap-3 h-10 rounded-xl px-3"
-                : "w-10 h-10 rounded-lg mx-auto justify-center"
+                ? "gap-3 h-10 rounded-xl px-3 min-w-0"
+                : "w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] rounded-xl mx-auto flex items-center justify-center shrink-0"
             }`}
             title={`Sign out (${displayName})`}
           >
-            <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xs font-semibold shrink-0">
-              {displayName.charAt(0).toUpperCase()}
-            </div>
-            <span
-              className="text-sm font-medium whitespace-nowrap transition-opacity duration-200 overflow-hidden"
-              style={{
-                opacity: expanded ? 1 : 0,
-                width: expanded ? "auto" : 0,
-              }}
-            >
-              Sign out
-            </span>
+            {expanded ? (
+              <>
+                <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xs font-semibold shrink-0">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+                <span className="text-sm font-medium whitespace-nowrap flex-1 overflow-hidden min-w-0 text-left">
+                  Sign out
+                </span>
+              </>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center shrink-0">
+                <div className="w-6 h-6 rounded-full bg-accent/20 flex items-center justify-center text-accent text-xs font-semibold">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+              </div>
+            )}
           </button>
         </div>
       </aside>
