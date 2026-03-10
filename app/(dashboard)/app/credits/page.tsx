@@ -119,7 +119,7 @@ export default function CreditsPage(): ReactNode {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-100/90">
+    <div className="h-full min-h-0 flex flex-col overflow-y-auto bg-neutral-100/90">
       {/* ─── Header ───────────────────────────────────────────────────────── */}
       <div className="bg-white border-b border-neutral-200/80">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">

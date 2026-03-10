@@ -1,7 +1,8 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
-import type { Asset, Project, StoryboardScene } from "@/lib/types";
+import type { Asset, Project, Render, StoryboardScene } from "@/lib/types";
+import { calculateCreditCost } from "@/lib/types";
 import {
   DndContext,
   closestCenter,
@@ -23,6 +24,7 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  Film,
   GripVertical,
   Loader2,
   Monitor,
@@ -33,9 +35,11 @@ import {
   Sparkles,
 } from "lucide-react";
 import { motion } from "motion/react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { StepNavigation } from "@/components/step-navigation";
+import { ConfirmModal } from "@/components/confirm-modal";
 
 const ease = [0.23, 1, 0.32, 1] as const;
 
@@ -288,6 +292,15 @@ export default function StoryboardPage(): ReactNode {
   const [videoFormat, setVideoFormat] = useState<"16:9" | "9:16">("16:9");
   const [selectedScene, setSelectedScene] = useState<StoryboardScene | null>(null);
 
+  // Existing clips for format-aware CTA
+  const [existingClips, setExistingClips] = useState<Render[]>([]);
+
+  // Credit balance + approval modal
+  const [creditBalance, setCreditBalance] = useState<number | null>(null);
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [creditDeducting, setCreditDeducting] = useState(false);
+  const [creditError, setCreditError] = useState<string | null>(null);
+
   // Store the original AI-recommended order for reset
   const originalOrderRef = useRef<StoryboardScene[]>([]);
 
@@ -302,16 +315,21 @@ export default function StoryboardPage(): ReactNode {
 
   const loadData = useCallback(async () => {
     setLoading(true);
-    const [projectRes, assetsRes, scenesRes] = await Promise.all([
+    const [projectRes, assetsRes, scenesRes, clipsRes] = await Promise.all([
       supabase.from("projects").select("*").eq("id", projectId).single(),
       supabase.from("assets").select("*").eq("project_id", projectId).order("created_at"),
       supabase.from("storyboard_scenes").select("*").eq("project_id", projectId).order("scene_order"),
+      supabase
+        .from("renders")
+        .select("id, input_refs")
+        .eq("project_id", projectId)
+        .eq("type", "scene_clip")
+        .eq("status", "done"),
     ]);
 
     if (projectRes.data) {
       setProject(projectRes.data as Project);
       setStylePack(projectRes.data.style_pack_id ?? "modern-clean");
-      // Load video format (may not exist in DB yet, default to 16:9)
       const fmt = (projectRes.data as Record<string, unknown>).video_format as string | null | undefined;
       setVideoFormat(fmt === "9:16" ? "9:16" : "16:9");
     }
@@ -321,12 +339,29 @@ export default function StoryboardPage(): ReactNode {
       setScenes(sceneData);
       originalOrderRef.current = [...sceneData];
     }
+    if (clipsRes.data) setExistingClips(clipsRes.data as Render[]);
     setLoading(false);
   }, [projectId, supabase]);
 
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  // Load credit balance
+  useEffect(() => {
+    const loadBalance = async () => {
+      try {
+        const res = await fetch("/api/credits");
+        if (res.ok) {
+          const data = await res.json() as { balance: number };
+          setCreditBalance(data.balance);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void loadBalance();
+  }, []);
 
   // Auto-determine cut length from photo count
   const cutLength = autoCutLength(assets.length);
@@ -416,13 +451,67 @@ export default function StoryboardPage(): ReactNode {
     }
   };
 
+  // Determine if clips already exist for the currently selected format
+  const hasClipsForFormat = existingClips.some((clip) => {
+    const refs = clip.input_refs as Record<string, string> | null;
+    return refs?.video_format === videoFormat;
+  });
+
+  const creditsRequired = calculateCreditCost(assets.length);
+  const formatLabel = videoFormat === "9:16" ? "Portrait (9:16)" : "Landscape (16:9)";
+
   const handleContinue = async () => {
-    await saveStoryboardState();
-    await supabase
-      .from("projects")
-      .update({ status: "storyboard_ready" })
-      .eq("id", projectId);
-    router.push(`/app/project/${projectId}/generate`);
+    if (hasClipsForFormat) {
+      await saveStoryboardState();
+      router.push(`/app/project/${projectId}/editor`);
+    } else {
+      setShowCreditModal(true);
+    }
+  };
+
+  const handleConfirmGenerate = async () => {
+    setCreditDeducting(true);
+    setCreditError(null);
+    try {
+      const deductRes = await fetch("/api/credits/deduct", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId, photoCount: assets.length }),
+      });
+      const deductData = await deductRes.json() as {
+        success?: boolean;
+        newBalance?: number;
+        error?: string;
+        currentBalance?: number;
+      };
+
+      if (!deductRes.ok) {
+        if (deductRes.status === 402) {
+          setCreditError(`Insufficient credits. You need ${creditsRequired} but have ${deductData.currentBalance ?? 0}.`);
+        } else {
+          setCreditError(deductData.error ?? "Failed to process credit. Please try again.");
+        }
+        setCreditDeducting(false);
+        return;
+      }
+
+      if (deductData.newBalance !== undefined) {
+        setCreditBalance(deductData.newBalance);
+      }
+
+      await saveStoryboardState();
+      await supabase
+        .from("projects")
+        .update({ status: "storyboard_ready" })
+        .eq("id", projectId);
+
+      setShowCreditModal(false);
+      router.push(`/app/project/${projectId}/generate`);
+    } catch {
+      setCreditError("Network error. Please try again.");
+    } finally {
+      setCreditDeducting(false);
+    }
   };
 
   const getAssetUrl = (asset: Asset) => {
@@ -615,16 +704,39 @@ export default function StoryboardPage(): ReactNode {
             </DndContext>
           )}
 
-          {/* Continue */}
+          {/* Continue / Go to Edit */}
           {scenes.length > 0 && (
-            <div className="pb-6">
+            <div className="pb-6 space-y-2">
               <button
                 onClick={handleContinue}
-                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white text-sm font-medium hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors min-h-[44px]"
+                className={`inline-flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium transition-colors min-h-[44px] ${
+                  hasClipsForFormat
+                    ? "bg-accent text-white hover:bg-accent/90"
+                    : "bg-neutral-900 dark:bg-white dark:text-neutral-900 text-white hover:bg-neutral-800 dark:hover:bg-neutral-100"
+                }`}
               >
-                Continue to Generate Clips
-                <ArrowRight className="w-4 h-4" />
+                {hasClipsForFormat ? (
+                  <>
+                    <Film className="w-4 h-4" />
+                    Go to Edit Video
+                  </>
+                ) : (
+                  <>
+                    Generate Clips
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
+              {hasClipsForFormat && (
+                <p className="text-xs text-neutral-500">
+                  A generated {formatLabel} version already exists.
+                </p>
+              )}
+              {!hasClipsForFormat && existingClips.length > 0 && (
+                <p className="text-xs text-neutral-500">
+                  Generate a new {formatLabel} version to continue.
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -679,6 +791,56 @@ export default function StoryboardPage(): ReactNode {
         currentStep={2}
         onSave={saveStoryboardState}
       />
+
+      {/* Credit Approval Modal */}
+      <ConfirmModal
+        open={showCreditModal}
+        onClose={() => {
+          if (!creditDeducting) {
+            setShowCreditModal(false);
+            setCreditError(null);
+          }
+        }}
+        onConfirm={handleConfirmGenerate}
+        title="Generate video?"
+        confirmLabel={creditDeducting ? "Processing…" : `Use ${creditsRequired} Credit${creditsRequired > 1 ? "s" : ""} & Generate`}
+        confirming={creditDeducting}
+      >
+        <div className="space-y-3">
+          <p>
+            You&apos;re about to use <strong>{creditsRequired} credit{creditsRequired > 1 ? "s" : ""}</strong> to
+            generate this video in <strong>{formatLabel}</strong> from{" "}
+            <strong>{scenes.filter((s) => s.include).length} scenes</strong>.
+          </p>
+          <p className="text-neutral-500">
+            Once generated, you&apos;ll be able to edit scenes, music, and timing before export.
+          </p>
+          {creditBalance !== null && (
+            <div className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-neutral-100 dark:bg-neutral-800 text-sm">
+              <span className="text-neutral-600 dark:text-neutral-300">Current balance</span>
+              <span className={`font-semibold tabular-nums ${
+                creditBalance < creditsRequired ? "text-red-500" : "text-neutral-900 dark:text-white"
+              }`}>
+                {creditBalance} credit{creditBalance !== 1 ? "s" : ""}
+              </span>
+            </div>
+          )}
+          {creditError && (
+            <div className="px-3 py-2.5 rounded-xl bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-sm">
+              <p>{creditError}</p>
+              {creditError.includes("Insufficient") && (
+                <Link
+                  href="/app/credits"
+                  className="inline-flex items-center gap-1 mt-1.5 text-accent hover:underline text-sm font-medium"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Purchase credits
+                </Link>
+              )}
+            </div>
+          )}
+        </div>
+      </ConfirmModal>
     </div>
   );
 }

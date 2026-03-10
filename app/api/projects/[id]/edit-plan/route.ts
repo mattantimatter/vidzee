@@ -134,31 +134,25 @@ export async function POST(
       },
     });
 
-    // Create final render rows (only vertical and horizontal)
+    // Create final render row for the project's selected format only
+    const projectFormat = (project as Record<string, unknown>).video_format as string | null | undefined;
+    const isPortrait = projectFormat === "9:16";
+    const renderType = isPortrait ? "final_vertical" : "final_horizontal";
+    const aspectRatio = isPortrait ? "9:16" : "16:9";
+
     const { data: newRenders } = await admin
       .from("renders")
-      .insert([
-        {
-          project_id: projectId,
-          type: "final_vertical",
-          status: "queued",
-          provider: "ffmpeg",
-          input_refs: {
-            edit_plan: editPlan,
-            aspect_ratio: "9:16",
-          },
+      .insert({
+        project_id: projectId,
+        type: renderType,
+        status: "queued",
+        provider: "ffmpeg",
+        input_refs: {
+          edit_plan: editPlan,
+          aspect_ratio: aspectRatio,
+          video_format: aspectRatio,
         },
-        {
-          project_id: projectId,
-          type: "final_horizontal",
-          status: "queued",
-          provider: "ffmpeg",
-          input_refs: {
-            edit_plan: editPlan,
-            aspect_ratio: "16:9",
-          },
-        },
-      ])
+      })
       .select();
 
     // Update project status
