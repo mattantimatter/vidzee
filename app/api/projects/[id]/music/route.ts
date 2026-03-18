@@ -16,7 +16,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
-const FAL_API_KEY = process.env.FAL_API_KEY ?? "";
+const FAL_API_KEY = process.env.FAL_KEY ?? process.env.FAL_API_KEY ?? "";
 const FAL_QUEUE_URL = "https://queue.fal.run/beatoven/music-generation";
 const FAL_STATUS_URL = "https://queue.fal.run/beatoven/music-generation/requests";
 
@@ -30,7 +30,7 @@ export async function POST(
 
   if (!FAL_API_KEY) {
     return NextResponse.json(
-      { error: "FAL_API_KEY not configured" },
+      { error: "FAL_KEY or FAL_API_KEY not configured" },
       { status: 500 }
     );
   }
@@ -151,7 +151,7 @@ export async function GET(
 
   if (!FAL_API_KEY) {
     return NextResponse.json(
-      { error: "FAL_API_KEY not configured" },
+      { error: "FAL_KEY or FAL_API_KEY not configured" },
       { status: 500 }
     );
   }

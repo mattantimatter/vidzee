@@ -48,6 +48,7 @@ export const StoryboardSceneSchema = z.object({
     "pan_right",
     "tilt_up",
     "tilt_down",
+    "subtle_dolly_forward",
     "orbit",
     "crane_up",
     "tracking_left",
@@ -313,7 +314,7 @@ export async function generateStoryboard(params: {
 You MUST respond with valid JSON matching this exact schema:
 {
   "room_tags": [{ "asset_id": "uuid", "room_type": "string", "confidence": 0.0-1.0, "description": "string" }],
-  "scenes": [{ "asset_id": "uuid", "scene_order": 1, "caption": "string", "motion_template": "push_in|pan_left|pan_right|tilt_up|tilt_down|orbit|crane_up|tracking_left|tracking_right|dolly_back", "target_duration_sec": 3 }],
+  "scenes": [{ "asset_id": "uuid", "scene_order": 1, "caption": "string", "motion_template": "push_in|pan_left|pan_right|tilt_up|tilt_down|subtle_dolly_forward (prefer push_in for kitchens/baths; subtle_dolly_forward or slow pan for wide living/kitchen shots; exterior: push_in or slow pan)", "target_duration_sec": 3 }],
   "narrative_arc": "string describing the video flow"
 }
 

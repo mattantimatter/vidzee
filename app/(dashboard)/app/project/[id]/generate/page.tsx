@@ -172,11 +172,21 @@ export default function GeneratePage(): ReactNode {
   };
 
   const retryScene = async (renderId: string) => {
-    await supabase
-      .from("renders")
-      .update({ status: "queued", error: null })
-      .eq("id", renderId);
-    await loadData();
+    try {
+      const res = await fetch(`/api/projects/${projectId}/clips/retry`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ render_id: renderId }),
+      });
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        alert(data.error ?? "Could not retry this scene");
+        return;
+      }
+      await loadData();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Retry failed");
+    }
   };
 
   const getAssetUrl = (assetId: string | null) => {
@@ -283,7 +293,7 @@ export default function GeneratePage(): ReactNode {
                   Overall Progress
                   {hasRunning && (
                     <span className="ml-2 text-orange-500 animate-pulse">
-                      Polling Fal.ai...
+                      Generating scene clips…
                     </span>
                   )}
                 </span>

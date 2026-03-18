@@ -22,6 +22,17 @@ A premium, production-ready Next.js 16+ landing page template designed for SaaS 
 - ✅ **Accessibility** - skip links, focus rings, ARIA labels
 - ✅ **Edge Compatible** - deploy anywhere
 
+## Scene clips (fal.ai / Grok Imagine Video)
+
+Per-photo clips are generated with **xai/grok-imagine-video/image-to-video** on the server only.
+
+| Variable | Description |
+|----------|-------------|
+| `FAL_KEY` | Preferred fal.ai API key (server-side). |
+| `FAL_API_KEY` | Fallback if `FAL_KEY` is unset. |
+| `VIDEO_MOTION_INTENSITY` | Optional: `minimal` \| `subtle` (default) \| `standard` — scales on-screen motion strength. |
+| `VIDEO_CLIP_RESOLUTION` | Optional: `720p` (default) \| `480p`. |
+
 ## 🚀 Quick Start
 
 ### 1. Install dependencies

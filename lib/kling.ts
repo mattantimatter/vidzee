@@ -1,4 +1,5 @@
 /**
+ * @deprecated Listing clips use Grok Imagine Video via fal.ai (`lib/video-providers/grok-imagine.ts`).
  * Kling AI Client — Image-to-Video Generation
  *
  * Uses the Kling AI API (api-singapore.klingai.com) with JWT auth.

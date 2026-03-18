@@ -79,7 +79,7 @@ function CinematicVideoCard(): ReactNode {
           Cinematic Video Generation
         </h3>
         <p className="text-card-foreground-muted text-sm">
-          Powered by Kling AI, each scene gets professional camera motions —
+          Each listing photo becomes a short clip with subtle, stabilized camera motion —
           smooth push-ins, elegant pans, and dramatic reveals that bring
           listings to life.
         </p>

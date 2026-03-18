@@ -29,6 +29,7 @@ export type MotionTemplate =
   | "pan_right"
   | "tilt_up"
   | "tilt_down"
+  | "subtle_dolly_forward"
   | "orbit"
   | "crane_up"
   | "tracking_left"

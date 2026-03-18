@@ -116,124 +116,65 @@ export function getStylePack(id: string): StylePack {
 }
 
 /**
- * Get the Kling AI motion prompt for a given motion template.
- *
- * Task 5 improvements:
- * - Every prompt includes "continuous", "throughout the entire duration", "from first frame to last frame"
- * - Specific camera speed descriptions: "slow and steady", "gradually accelerating"
- * - Scene-specific context: "revealing architectural details", "showcasing the room's depth"
- * - Room-type-specific motion recommendations are now embedded in the storyboard AI prompt
+ * @deprecated Scene clips use buildRealEstateVideoPrompt() + normalizeToEffectiveMotion().
+ * Kept for any legacy call sites.
  */
 export function getMotionPrompt(motionTemplate: string): string {
-  const prompts: Record<string, string> = {
-    push_in:
-      "Continuous slow and steady dolly push-in camera movement throughout the entire clip duration from first frame to last frame, gradually moving forward into the room revealing architectural details and depth, cinematic real estate interior, the camera glides deeper into the space at a constant pace without stopping, pausing, or reversing at any point",
-
-    pan_left:
-      "Continuous smooth horizontal pan sweeping from right to left throughout the entire clip duration from first frame to last frame, slowly and steadily revealing the full room panorama and showcasing the room's width, cinematic real estate interior, the camera rotation never stops or hesitates, maintaining a constant speed from start to finish",
-
-    pan_right:
-      "Continuous smooth horizontal pan sweeping from left to right throughout the entire clip duration from first frame to last frame, slowly and steadily revealing the full room panorama and showcasing the room's width, cinematic real estate interior, the camera rotation never stops or hesitates, maintaining a constant speed from start to finish",
-
-    tilt_up:
-      "Continuous smooth vertical tilt upward throughout the entire clip duration from first frame to last frame, slowly and steadily revealing from floor level up to ceiling and architectural details such as crown molding, beams, and height, cinematic real estate interior, the upward camera tilt maintains constant speed without pausing",
-
-    tilt_down:
-      "Continuous smooth vertical tilt downward throughout the entire clip duration from first frame to last frame, slowly and steadily revealing from ceiling down to floor level showcasing flooring materials and furnishings, cinematic real estate interior, the downward camera tilt maintains constant speed without pausing",
-
-    orbit:
-      "Continuous slow orbital camera movement circling around the room's focal point throughout the entire clip duration from first frame to last frame, the camera arcs gracefully around the subject at a slow and steady pace showcasing the room's depth and three-dimensional space, cinematic real estate interior, the orbital motion never stops or slows down",
-
-    crane_up:
-      "Continuous smooth crane-up camera movement rising vertically throughout the entire clip duration from first frame to last frame, starting from a low angle and gradually accelerating upward to reveal the full height of the space and architectural grandeur, cinematic real estate interior, the upward crane motion maintains consistent velocity from start to finish",
-
-    tracking_left:
-      "Continuous smooth lateral tracking shot moving left throughout the entire clip duration from first frame to last frame, the camera glides sideways along the room at a slow and steady pace revealing depth and dimension and showcasing the room's full length, cinematic real estate interior, the lateral motion never stops or pauses",
-
-    tracking_right:
-      "Continuous smooth lateral tracking shot moving right throughout the entire clip duration from first frame to last frame, the camera glides sideways along the room at a slow and steady pace revealing depth and dimension and showcasing the room's full length, cinematic real estate interior, the lateral motion never stops or pauses",
-
-    dolly_back:
-      "Continuous smooth dolly pull-back camera movement throughout the entire clip duration from first frame to last frame, slowly and steadily moving backward to reveal the full scope of the room and its relationship to adjacent spaces, cinematic real estate interior, the backward motion maintains constant speed without stopping or reversing",
-  };
-
-  return (
-    prompts[motionTemplate] ??
-    "Continuous smooth cinematic camera movement throughout the entire clip duration from first frame to last frame, real estate interior, slow and steady motion that never stops or pauses, showcasing the room's architectural details and depth"
-  );
+  return motionTemplate;
 }
 
 /**
- * Determine the best motion template for a given room type.
- * Used in storyboard generation to assign scene-appropriate camera motion.
- *
- * Task 5: Room-type-specific motion assignment:
- * - Exterior shots → orbit or tracking shot
- * - Long rooms (hallways, kitchens) → push_in or tracking
- * - Bathrooms/small rooms → slow pan
- * - Living rooms/open spaces → crane or orbit
- * - Pool/outdoor → pull_back or orbit
+ * Assign motion template per room type for storyboard (Grok-friendly, stable moves).
+ * Uses: push_in, pan_left, pan_right, tilt_*, subtle_dolly_forward only at assignment;
+ * legacy values are normalized at generation time.
  */
 export function getBestMotionForRoom(roomType: string): string {
   const roomMotionMap: Record<string, string> = {
-    // Exterior/aerial — sweeping reveal
-    aerial: "orbit",
+    aerial: "push_in",
     exterior: "pan_left",
-    front: "pan_right",
+    front: "push_in",
 
-    // Entry/transition spaces
-    entry: "push_in",
-    foyer: "push_in",
-    hallway: "tracking_right",
+    entry: "subtle_dolly_forward",
+    foyer: "subtle_dolly_forward",
+    hallway: "subtle_dolly_forward",
 
-    // Main living spaces — showcase the room's depth
-    living_room: "orbit",
-    great_room: "crane_up",
-    family_room: "pan_left",
+    living_room: "subtle_dolly_forward",
+    great_room: "pan_left",
+    family_room: "pan_right",
 
-    // Dining — reveal the table setting
-    dining_room: "orbit",
-    dining: "orbit",
+    dining_room: "pan_left",
+    dining: "push_in",
 
-    // Kitchen — follow the countertop line
-    kitchen: "tracking_right",
+    kitchen: "push_in",
 
-    // Primary suite — intimate, inviting
     primary_suite: "push_in",
     primary_bedroom: "push_in",
-    master_bedroom: "dolly_back",
+    master_bedroom: "push_in",
 
-    // Primary bathroom — reveal fixtures
-    primary_bathroom: "tilt_up",
-    master_bathroom: "crane_up",
+    primary_bathroom: "push_in",
+    master_bathroom: "push_in",
 
-    // Secondary bedrooms
     bedroom: "push_in",
 
-    // Bathrooms/small rooms — slow pan
-    bathroom: "pan_left",
+    bathroom: "push_in",
 
-    // Office/study
     office: "pan_right",
-    study: "pan_left",
+    study: "push_in",
 
-    // Bonus/flex spaces
-    bonus_room: "tracking_left",
+    bonus_room: "subtle_dolly_forward",
 
-    // Utility spaces
-    laundry: "tracking_right",
-    laundry_room: "tracking_right",
+    laundry: "push_in",
+    laundry_room: "push_in",
     utility: "push_in",
-    garage: "tracking_left",
+    garage: "subtle_dolly_forward",
     mudroom: "push_in",
-    basement: "tracking_right",
+    basement: "subtle_dolly_forward",
 
-    // Outdoor — pull_back or orbit
-    patio: "dolly_back",
-    deck: "dolly_back",
+    patio: "pan_left",
+    deck: "pan_right",
     backyard: "pan_left",
-    pool: "orbit",
-    garden: "crane_up",
+    pool: "push_in",
+    garden: "tilt_up",
     balcony: "pan_right",
   };
 
