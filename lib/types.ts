@@ -256,7 +256,7 @@ export const CREDIT_PACKS: CreditPack[] = [
     price: 19,
     perCredit: 19,
     discount: 0,
-    description: "Perfect for testing one property video.",
+    description: "One standard listing video — ideal to try Vidzee.",
   },
   {
     id: "pro",
@@ -275,16 +275,7 @@ export const CREDIT_PACKS: CreditPack[] = [
     price: 149,
     perCredit: 14.9,
     discount: 22,
-    description: "Built for agents and small teams with steady listing volume.",
-  },
-  {
-    id: "team",
-    name: "Team",
-    credits: 25,
-    price: 349,
-    perCredit: 13.96,
-    discount: 27,
-    description: "Best for brokerages and high-volume marketing workflows.",
+    description: "Steady listing volume for agents and small teams.",
   },
 ];
 

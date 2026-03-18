@@ -4,7 +4,7 @@
  * Creates a Stripe Checkout session for purchasing credit packs.
  * Returns the checkout URL for redirect.
  *
- * Body: { packId: "single" | "pro5" | "agency15" | "enterprise50" }
+ * Body: { packId: "starter" | "pro" | "agent" }
  */
 
 import { NextResponse, type NextRequest } from "next/server";
