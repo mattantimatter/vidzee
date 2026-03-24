@@ -3,8 +3,9 @@
  *
  * Video assembly pipeline with two-tier approach:
  *
- * 1. PRIMARY: Download scene clips → ffmpeg concat → upload final MP4
+ * 1. PRIMARY: Download scene clips → ffmpeg concat → mix music → upload final MP4
  *    Uses ffmpeg-static (serverExternalPackages in next.config.ts).
+ *    Music is baked in at the correct volume, trimmed/looped to video length.
  *
  * 2. FALLBACK: If ffmpeg fails (binary missing, timeout, size limit),
  *    store ordered clip URLs as a JSON "playlist" in the render row.
@@ -146,9 +147,18 @@ export async function POST(
   interface SavedEditorState {
     clips?: EditorClipState[];
     totalDuration?: number;
+    musicUrl?: string | null;
+    musicVolume?: number;
   }
   const savedEditorState = editorStateRow?.input_refs as SavedEditorState | null;
   const hasEditorState = !!(savedEditorState?.clips && savedEditorState.clips.length > 0);
+
+  // Extract music settings from editor state
+  const musicUrl = savedEditorState?.musicUrl ?? null;
+  const musicVolume = typeof savedEditorState?.musicVolume === "number"
+    ? Math.max(0, Math.min(1, savedEditorState.musicVolume))
+    : 0.3;
+  console.log(`[Render] Music: ${musicUrl ? `${musicUrl.slice(0, 60)}... (vol: ${musicVolume})` : "none"}`);
 
   // Get all completed scene clips
   const { data: sceneClips, error: clipsError } = await admin
@@ -289,12 +299,27 @@ export async function POST(
             "-ss", trimStart.toFixed(3),
             "-to", trimEnd.toFixed(3),
             "-i", rawFile,
-            "-c", "copy",
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "18",
+            "-pix_fmt", "yuv420p",
+            "-an",
             trimmedFile,
-          ], { timeout: 15000, maxBuffer: 10 * 1024 * 1024 });
+          ], { timeout: 20000, maxBuffer: 10 * 1024 * 1024 });
           clipPaths.push(trimmedFile);
         } else {
-          clipPaths.push(rawFile);
+          // Re-encode raw clips to ensure uniform codec/resolution for concat
+          await execFileAsync(ffmpegPath, [
+            "-y",
+            "-i", rawFile,
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "18",
+            "-pix_fmt", "yuv420p",
+            "-an",
+            trimmedFile,
+          ], { timeout: 20000, maxBuffer: 10 * 1024 * 1024 });
+          clipPaths.push(trimmedFile);
         }
       }
 
@@ -309,7 +334,8 @@ export async function POST(
         clipPaths.map((p) => `file '${p}'`).join("\n")
       );
 
-      // Run ffmpeg concat (stream copy — no re-encoding, very fast)
+      // Step 1: Concat all clips into a single video (re-encode for smooth playback)
+      const concatFile = path.join(tmpDir, "concat.mp4");
       const outputFile = path.join(tmpDir, "final.mp4");
       console.log(`[Render] Running ffmpeg concat with ${clipPaths.length} clips...`);
 
@@ -318,13 +344,62 @@ export async function POST(
         "-f", "concat",
         "-safe", "0",
         "-i", concatListPath,
-        "-c", "copy",
+        "-c:v", "libx264",
+        "-preset", "fast",
+        "-crf", "18",
+        "-pix_fmt", "yuv420p",
         "-movflags", "+faststart",
-        outputFile,
+        "-an", // no audio track yet — added in music step
+        concatFile,
       ], {
-        timeout: 30000,
+        timeout: 40000,
         maxBuffer: 10 * 1024 * 1024,
       });
+
+      // Step 2: Mix music if available, otherwise just copy
+      if (musicUrl) {
+        console.log(`[Render] Downloading music from: ${musicUrl.slice(0, 80)}...`);
+        try {
+          const musicRes = await fetch(musicUrl);
+          if (musicRes.ok) {
+            const musicBuffer = Buffer.from(await musicRes.arrayBuffer());
+            const musicFile = path.join(tmpDir, "music.mp3");
+            await fs.writeFile(musicFile, musicBuffer);
+
+            // Mix music: loop to video length, apply volume, fade out last 2s
+            const fadeStart = Math.max(0, totalDuration - 2);
+            console.log(`[Render] Mixing music (vol=${musicVolume}, fade at ${fadeStart.toFixed(1)}s)...`);
+            await execFileAsync(ffmpegPath, [
+              "-y",
+              "-i", concatFile,
+              "-stream_loop", "-1",
+              "-i", musicFile,
+              "-filter_complex",
+              `[1:a]volume=${musicVolume.toFixed(2)},afade=t=out:st=${fadeStart.toFixed(2)}:d=2,atrim=0:${totalDuration.toFixed(3)},asetpts=PTS-STARTPTS[music];[music]aformat=sample_rates=44100:channel_layouts=stereo[aout]`,
+              "-map", "0:v",
+              "-map", "[aout]",
+              "-c:v", "copy",
+              "-c:a", "aac",
+              "-b:a", "192k",
+              "-shortest",
+              "-movflags", "+faststart",
+              outputFile,
+            ], {
+              timeout: 40000,
+              maxBuffer: 10 * 1024 * 1024,
+            });
+            console.log(`[Render] Music mixed successfully`);
+          } else {
+            console.warn(`[Render] Music download failed (${musicRes.status}), using video-only`);
+            await fs.copyFile(concatFile, outputFile);
+          }
+        } catch (musicErr) {
+          console.warn(`[Render] Music mixing failed: ${musicErr instanceof Error ? musicErr.message : musicErr}, using video-only`);
+          await fs.copyFile(concatFile, outputFile);
+        }
+      } else {
+        await fs.copyFile(concatFile, outputFile);
+      }
 
       // Verify output
       const stats = await fs.stat(outputFile);
@@ -337,7 +412,6 @@ export async function POST(
       // Upload to final-exports bucket
       const fileBuffer = await fs.readFile(outputFile);
 
-      // Upload same file for both vertical and horizontal (same source clips)
       for (const render of finalRenders) {
         const storagePath = `${projectId}/${render.id}.mp4`;
         console.log(`[Render] Uploading ${render.type} to final-exports/${storagePath}...`);
@@ -364,7 +438,7 @@ export async function POST(
           })
           .eq("id", render.id);
 
-        console.log(`[Render] ${render.type} complete (ffmpeg)`);
+        console.log(`[Render] ${render.type} complete (ffmpeg${musicUrl ? " + music" : ""})`);
       }
 
       ffmpegSuccess = true;
@@ -397,6 +471,8 @@ export async function POST(
         type: "playlist",
         clips: clipUrls,
         totalDuration,
+        musicUrl: musicUrl ?? null,
+        musicVolume,
       });
 
       for (const render of finalRenders) {

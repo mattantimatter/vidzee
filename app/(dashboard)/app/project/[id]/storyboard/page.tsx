@@ -555,13 +555,13 @@ export default function StoryboardPage(): ReactNode {
           </div>
 
           {/* Controls Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 md:items-stretch">
             {/* Style Pack */}
-            <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5">
+            <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5 flex flex-col">
               <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3">
                 Style Pack
               </h3>
-              <div className="space-y-2">
+              <div className="space-y-2 flex-1">
                 {STYLE_PACKS.map((pack) => (
                   <button
                     key={pack.id}
@@ -582,7 +582,7 @@ export default function StoryboardPage(): ReactNode {
             </div>
 
             {/* Video Format & Duration Info */}
-            <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5">
+            <div className="bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-2xl p-5 flex flex-col">
               <h3 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3">
                 Video Format
               </h3>

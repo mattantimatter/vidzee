@@ -265,10 +265,13 @@ export default function GeneratePage(): ReactNode {
               </p>
             </div>
             {!allDone && renders.length === 0 && (
-              <button
+              <motion.button
                 onClick={startGeneration}
                 disabled={generating || scenes.length === 0}
-                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 min-h-[44px] shrink-0"
+                whileHover={{ scale: 1.03, boxShadow: "0 4px 16px rgba(14,165,233,0.25)" }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.15 }}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 active:bg-accent/80 transition-colors disabled:opacity-50 min-h-[44px] shrink-0 shadow-sm shadow-accent/20"
               >
                 {generating ? (
                   <>
@@ -281,7 +284,7 @@ export default function GeneratePage(): ReactNode {
                     Generate All Clips
                   </>
                 )}
-              </button>
+                </motion.button>
             )}
           </div>
 
@@ -327,9 +330,11 @@ export default function GeneratePage(): ReactNode {
                   <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
+                    whileHover={{ y: -2, boxShadow: "0 6px 20px rgba(14,165,233,0.10)" }}
+                    whileTap={{ scale: 0.97 }}
                     transition={{ delay: i * 0.03, ease }}
                     onClick={() => handleSceneTap(scene.id)}
-                    className={`border rounded-xl overflow-hidden bg-white cursor-pointer transition-all ${
+                    className={`border rounded-xl overflow-hidden bg-white cursor-pointer transition-colors ${
                       isSelected
                         ? "border-accent ring-1 ring-accent/30"
                         : "border-neutral-200 hover:border-accent/30"

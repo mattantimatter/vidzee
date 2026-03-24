@@ -15,6 +15,13 @@ import { CREDIT_PACKS } from "@/lib/types";
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://vidzee.vercel.app";
 
+// Stripe Price IDs — created via setup script
+const STRIPE_PRICE_IDS: Record<string, string> = {
+  starter: "price_1TEdu42QOheDC14xB3O9OdcN",
+  pro: "price_1TEdu52QOheDC14xZwR1nBGi",
+  agent: "price_1TEdu52QOheDC14x8OOltJJs",
+};
+
 export async function POST(request: NextRequest) {
   // Get authenticated user
   const cookieStore = await cookies();
@@ -48,6 +55,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid pack ID" }, { status: 400 });
   }
 
+  const priceId = STRIPE_PRICE_IDS[packId];
+
   // If Stripe is not configured, return test mode response
   if (!STRIPE_SECRET_KEY) {
     return NextResponse.json({
@@ -66,17 +75,19 @@ export async function POST(request: NextRequest) {
     });
 
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `Vidzee ${pack.name} Credits`,
-              description: `${pack.credits} video credit${pack.credits > 1 ? "s" : ""} for Vidzee real estate videos`,
+          price: priceId ?? undefined,
+          ...(priceId ? {} : {
+            price_data: {
+              currency: "usd",
+              product_data: {
+                name: `Vidzee ${pack.name} Credits`,
+                description: `${pack.credits} video credit${pack.credits > 1 ? "s" : ""} for Vidzee real estate videos`,
+              },
+              unit_amount: Math.round(pack.price * 100),
             },
-            unit_amount: Math.round(pack.price * 100), // cents
-          },
+          }),
           quantity: 1,
         },
       ],
@@ -89,6 +100,14 @@ export async function POST(request: NextRequest) {
         credits: pack.credits.toString(),
       },
       ...(user.email ? { customer_email: user.email } : {}),
+      payment_intent_data: {
+        metadata: {
+          user_id: user.id,
+          pack_id: pack.id,
+          credits: pack.credits.toString(),
+        },
+      },
+      allow_promotion_codes: true,
     });
 
     return NextResponse.json({ checkoutUrl: session.url });

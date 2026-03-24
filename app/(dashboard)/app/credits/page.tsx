@@ -24,8 +24,8 @@ const ease = [0.23, 1, 0.32, 1] as const;
 
 const TRUST_POINTS = [
   "Includes vertical + horizontal exports",
-  "Designed for standard 10–15 photo listings",
-  "Extra-long listings may use additional credits",
+  "1 credit = standard listing (up to 15 photos)",
+  "2 credits = large listing (16–30 photos)",
 ] as const;
 
 function formatDate(dateStr: string): string {
@@ -144,9 +144,9 @@ export default function CreditsPage(): ReactNode {
               Buy video credits
             </h1>
             <p className="mt-2 text-base text-neutral-600 dark:text-neutral-400 max-w-2xl leading-relaxed">
-              One credit typically covers a polished short video from a standard{" "}
-              <span className="font-medium text-neutral-800 dark:text-neutral-200">10–15 photo</span>{" "}
-              listing. Purchase packs that match how you list.
+              One credit covers a polished short video from a standard{" "}
+              <span className="font-medium text-neutral-800 dark:text-neutral-200">up to 15 photo</span>{" "}
+              listing. Larger listings (16–30 photos) use 2 credits. Purchase packs that match how you list.
             </p>
           </motion.div>
         </div>
@@ -267,14 +267,17 @@ export default function CreditsPage(): ReactNode {
                     {pack.description}
                   </p>
 
-                  <button
+                  <motion.button
                     type="button"
                     onClick={() => handlePurchase(pack.id)}
                     disabled={purchasing !== null}
-                    className={`mt-4 w-full min-h-[44px] inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950 disabled:opacity-50 ${
+                    whileHover={{ scale: purchasing !== null ? 1 : 1.03, boxShadow: popular ? "0 6px 20px rgba(14,165,233,0.25)" : "0 4px 14px rgba(0,0,0,0.12)" }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.15 }}
+                    className={`mt-4 w-full min-h-[44px] inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-950 disabled:opacity-50 ${
                       popular
-                        ? "bg-accent text-white hover:bg-accent/90 focus-visible:ring-accent"
-                        : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100 focus-visible:ring-neutral-400"
+                        ? "bg-accent text-white hover:bg-accent/90 active:bg-accent/80 focus-visible:ring-accent shadow-md shadow-accent/20"
+                        : "bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100 active:bg-neutral-700 focus-visible:ring-neutral-400 shadow-sm"
                     }`}
                   >
                     {purchasing === pack.id ? (
@@ -283,7 +286,7 @@ export default function CreditsPage(): ReactNode {
                       <CreditCard className="w-4 h-4" aria-hidden />
                     )}
                     {purchasing === pack.id ? "Processing…" : "Buy now"}
-                  </button>
+                  </motion.button>
                 </motion.div>
               );
             })}
@@ -325,12 +328,15 @@ export default function CreditsPage(): ReactNode {
                   listing videos per month.
                 </p>
               </div>
-              <a
+              <motion.a
                 href="mailto:support@vidzee.ai?subject=Enterprise%20pricing%20inquiry"
-                className="shrink-0 inline-flex items-center justify-center min-h-[44px] px-6 py-2.5 rounded-xl text-sm font-semibold bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-offset-neutral-950"
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.15 }}
+                className="shrink-0 inline-flex items-center justify-center min-h-[44px] px-6 py-2.5 rounded-xl text-sm font-semibold bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 hover:bg-neutral-800 dark:hover:bg-neutral-100 active:bg-neutral-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-neutral-400 dark:focus-visible:ring-offset-neutral-950 shadow-sm"
               >
                 Get custom pricing
-              </a>
+              </motion.a>
             </div>
           </motion.div>
         </section>
@@ -347,7 +353,11 @@ export default function CreditsPage(): ReactNode {
           <ul className="space-y-2.5 text-sm text-neutral-600 dark:text-neutral-400">
             <li className="flex gap-2">
               <span className="text-accent shrink-0">·</span>
-              One credit = one short video (10–15 photos). More photos may cost 2 credits.
+              <strong className="text-neutral-700 dark:text-neutral-300">1 credit</strong> = one polished short video from a standard listing (up to 15 photos).
+            </li>
+            <li className="flex gap-2">
+              <span className="text-accent shrink-0">·</span>
+              <strong className="text-neutral-700 dark:text-neutral-300">2 credits</strong> = larger listing with 16–30 photos. The credit cost is calculated automatically at generation time.
             </li>
             <li className="flex gap-2">
               <span className="text-accent shrink-0">·</span>

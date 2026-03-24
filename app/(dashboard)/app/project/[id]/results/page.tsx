@@ -360,15 +360,18 @@ export default function ResultsPage(): ReactNode {
             )}
           </div>
           {render.status === "done" && downloadUrl && (
-            <a
+            <motion.a
               href={downloadUrl}
               download
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 transition-colors"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-medium hover:bg-accent/90 active:bg-accent/80 transition-colors shadow-sm shadow-accent/20"
             >
               <Download className="w-3.5 h-3.5" />
               Download
-            </a>
+            </motion.a>
           )}
           {(render.status === "running" || render.status === "queued") && (
             <div className="flex items-center gap-1.5 text-xs text-neutral-400">
@@ -464,10 +467,13 @@ export default function ResultsPage(): ReactNode {
                 Generate your final {isPortrait ? "vertical (9:16)" : "horizontal (16:9)"} video
                 with captions, overlays, and transitions.
               </p>
-              <button
+              <motion.button
                 onClick={triggerRender}
                 disabled={triggering}
-                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50 min-h-[44px]"
+                whileHover={{ scale: triggering ? 1 : 1.04, boxShadow: "0 6px 24px rgba(14,165,233,0.30)" }}
+                whileTap={{ scale: 0.97 }}
+                transition={{ duration: 0.15 }}
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 active:bg-accent/80 transition-colors disabled:opacity-50 min-h-[44px] shadow-md shadow-accent/20"
               >
                 {triggering ? (
                   <>
@@ -478,13 +484,12 @@ export default function ResultsPage(): ReactNode {
                   <>
                     <Film className="w-4 h-4" />
                     Generate Final Video
-                  </>
+                   </>
                 )}
-              </button>
+              </motion.button>
             </motion.div>
           )}
-
-          {/* Rendering state */}
+          {/* Rendering state */
           {isRendering && !hasDoneRenders && (
             <motion.div
               initial={{ opacity: 0 }}

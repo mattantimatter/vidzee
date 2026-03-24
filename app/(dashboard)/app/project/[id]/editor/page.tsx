@@ -196,6 +196,8 @@ export default function EditorPage(): ReactNode {
   const [musicGenre, setMusicGenre] = useState("ambient");
   const [generatingMusic, setGeneratingMusic] = useState(false);
   const [musicError, setMusicError] = useState<string | null>(null);
+  const [musicDurationAtGeneration, setMusicDurationAtGeneration] = useState<number | null>(null);
+  const musicPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Task 2: Edit style
   const [editStyle, setEditStyle] = useState<EditStyleId>("real-estate-pro");
@@ -573,11 +575,18 @@ export default function EditorPage(): ReactNode {
   // ─── Task 1: Music Generation ──────────────────────────────────────────
 
   const generateMusic = useCallback(async () => {
+    // Clear any existing poll interval
+    if (musicPollRef.current) {
+      clearInterval(musicPollRef.current);
+      musicPollRef.current = null;
+    }
     setGeneratingMusic(true);
     setMusicError(null);
+    const targetDuration = Math.max(15, Math.min(120, Math.round(totalDuration)));
+    setMusicDurationAtGeneration(targetDuration);
 
     try {
-      // Task 1: Pass the FULL video duration (not per-clip)
+      // Pass the FULL video duration (not per-clip)
       const res = await fetch(`/api/projects/${projectId}/music`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -596,7 +605,9 @@ export default function EditorPage(): ReactNode {
       }
 
       if (data.status === "pending" && data.requestId) {
-        const pollInterval = setInterval(async () => {
+        let elapsed = 0;
+        musicPollRef.current = setInterval(async () => {
+          elapsed += 5;
           try {
             const pollRes = await fetch(
               `/api/projects/${projectId}/music?requestId=${data.requestId}`
@@ -604,28 +615,28 @@ export default function EditorPage(): ReactNode {
             const pollData = await pollRes.json();
 
             if (pollData.status === "completed" && pollData.audioUrl) {
-              clearInterval(pollInterval);
+              if (musicPollRef.current) clearInterval(musicPollRef.current);
+              musicPollRef.current = null;
               setMusicUrl(pollData.audioUrl);
               setGeneratingMusic(false);
             } else if (pollData.status === "failed") {
-              clearInterval(pollInterval);
+              if (musicPollRef.current) clearInterval(musicPollRef.current);
+              musicPollRef.current = null;
               setMusicError(pollData.error ?? "Music generation failed");
+              setGeneratingMusic(false);
+            } else if (elapsed >= 180) {
+              if (musicPollRef.current) clearInterval(musicPollRef.current);
+              musicPollRef.current = null;
+              setMusicError("Music generation timed out — please try again");
               setGeneratingMusic(false);
             }
           } catch {
-            clearInterval(pollInterval);
+            if (musicPollRef.current) clearInterval(musicPollRef.current);
+            musicPollRef.current = null;
             setMusicError("Failed to check music status");
             setGeneratingMusic(false);
           }
         }, 5000);
-
-        setTimeout(() => {
-          clearInterval(pollInterval);
-          if (generatingMusic) {
-            setMusicError("Music generation timed out");
-            setGeneratingMusic(false);
-          }
-        }, 180000);
       } else if (data.audioUrl) {
         setMusicUrl(data.audioUrl);
         setGeneratingMusic(false);
@@ -634,7 +645,24 @@ export default function EditorPage(): ReactNode {
       setMusicError(err instanceof Error ? err.message : "Music generation failed");
       setGeneratingMusic(false);
     }
-  }, [projectId, musicGenre, totalDuration, generatingMusic]);
+  }, [projectId, musicGenre, totalDuration]);
+
+  // Auto-clear stale music when clips are removed and duration drifts significantly
+  const prevClipsLengthRef = useRef<number>(0);
+  useEffect(() => {
+    const prevLen = prevClipsLengthRef.current;
+    const currLen = clips.length;
+    prevClipsLengthRef.current = currLen;
+    if (prevLen > currLen && musicUrl && musicDurationAtGeneration !== null) {
+      const drift = Math.abs(totalDuration - musicDurationAtGeneration);
+      if (drift > 10) {
+        setMusicUrl(null);
+        setMusicDurationAtGeneration(null);
+        setMusicError(`Video is now ${totalDuration.toFixed(0)}s — regenerate music to match.`);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clips.length]);
 
   // ─── Drag & Drop Handlers ──────────────────────────────────────────────
 
@@ -833,17 +861,20 @@ export default function EditorPage(): ReactNode {
                   </select>
                 </div>
 
-                <button
+                <motion.button
                   onClick={generateMusic}
                   disabled={generatingMusic}
-                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-neutral-900 text-white text-xs font-medium hover:bg-neutral-800 transition-colors disabled:opacity-50"
+                  whileHover={{ scale: generatingMusic ? 1 : 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  transition={{ duration: 0.15 }}
+                  className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-neutral-900 text-white text-xs font-medium hover:bg-neutral-800 active:bg-neutral-700 transition-colors disabled:opacity-50 shadow-sm"
                 >
                   {generatingMusic ? (
-                    <><Loader2 className="w-3.5 h-3.5 animate-spin" />Generating {totalDuration.toFixed(0)}s track...</>
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" />Generating {totalDuration.toFixed(0)}s track…</>
                   ) : (
                     <><Wand2 className="w-3.5 h-3.5" />Generate Music</>
                   )}
-                </button>
+                </motion.button>
 
                 {musicError && <p className="text-xs text-red-500">{musicError}</p>}
 
@@ -985,13 +1016,16 @@ export default function EditorPage(): ReactNode {
                       ))}
                   </div>
 
-                  <button
+                  <motion.button
                     onClick={() => removeClip(selectedClip.id)}
-                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-500 text-xs font-medium hover:bg-red-50 transition-colors"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.15 }}
+                    className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-red-200 text-red-500 text-xs font-medium hover:bg-red-50 active:bg-red-100 transition-colors"
                   >
                     <Trash2 className="w-3 h-3" />
                     Remove Clip
-                  </button>
+                  </motion.button>
                 </div>
               </div>
             )}

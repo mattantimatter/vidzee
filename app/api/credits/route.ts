@@ -1,100 +1,121 @@
 /**
- * GET /api/credits — Get current user's credit balance
- * POST /api/credits — Add test credits (test mode only)
+ * GET /api/credits — Get current user's credit balance and transaction history
+ * POST /api/credits — Add test credits (dev/test mode only)
  *
- * Uses Supabase user metadata to store credit balance.
- * No new DB tables required — balance stored in auth.users.user_metadata.credits
- * Transaction history stored in user_metadata.credit_history (last 20 entries)
+ * Uses the `credits` and `credit_transactions` Supabase DB tables.
+ * Service role is required for writes (bypasses RLS).
  */
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
 async function getAuthUser() {
   const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        },
+  const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
       },
-    }
-  );
+      setAll(cookiesToSet) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set(name, value, options);
+        });
+      },
+    },
+  });
   return supabase.auth.getUser();
 }
 
 function getAdminClient() {
-  return createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+}
+
+/** Ensure a credits row exists for the user; grant welcome bonus on first visit. */
+async function ensureCreditsRow(
+  admin: ReturnType<typeof getAdminClient>,
+  userId: string
+): Promise<number> {
+  const { data: existing } = await admin
+    .from("credits")
+    .select("balance")
+    .eq("user_id", userId)
+    .single();
+
+  if (existing) return existing.balance as number;
+
+  // First visit — create row with 2 welcome credits
+  const { data: inserted } = await admin
+    .from("credits")
+    .insert({ user_id: userId, balance: 2 })
+    .select("balance")
+    .single();
+
+  // Record welcome bonus transaction
+  await admin.from("credit_transactions").insert({
+    user_id: userId,
+    amount: 2,
+    type: "bonus",
+    description: "Welcome bonus — 2 free credits",
+  });
+
+  return (inserted?.balance as number) ?? 2;
 }
 
 export async function GET() {
-  const { data: { user }, error: authError } = await getAuthUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await getAuthUser();
+
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const admin = getAdminClient();
+  const balance = await ensureCreditsRow(admin, user.id);
 
-  // Get the full user record to access metadata
-  const { data: fullUser, error: userErr } = await admin.auth.admin.getUserById(user.id);
-  if (userErr || !fullUser) {
-    return NextResponse.json({ error: "Failed to load user" }, { status: 500 });
-  }
-
-  const meta = (fullUser.user.user_metadata ?? {}) as Record<string, unknown>;
-  const balance: number = typeof meta.credits === "number" ? meta.credits : 0;
-  const transactions: unknown[] = Array.isArray(meta.credit_history) ? meta.credit_history : [];
-
-  // If this is the first time the user visits, grant 2 welcome credits
-  if (typeof meta.credits === "undefined") {
-    const welcomeTransaction = {
-      id: crypto.randomUUID(),
-      amount: 2,
-      type: "bonus",
-      description: "Welcome bonus — 2 free credits",
-      created_at: new Date().toISOString(),
-    };
-    await admin.auth.admin.updateUserById(user.id, {
-      user_metadata: {
-        ...meta,
-        credits: 2,
-        credit_history: [welcomeTransaction],
-      },
-    });
-    return NextResponse.json({
-      balance: 2,
-      transactions: [welcomeTransaction],
-    });
-  }
+  const { data: transactions } = await admin
+    .from("credit_transactions")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
 
   return NextResponse.json({
     balance,
-    transactions,
+    transactions: transactions ?? [],
   });
 }
 
-// POST: Add test credits (only works when Stripe is not configured)
+/** POST: Add test credits — only works when STRIPE_SECRET_KEY is not set */
 export async function POST(request: NextRequest) {
-  const { data: { user }, error: authError } = await getAuthUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await getAuthUser();
+
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Block test credits in production (when Stripe is configured)
+  if (process.env.STRIPE_SECRET_KEY) {
+    return NextResponse.json(
+      { error: "Test credits unavailable in production" },
+      { status: 403 }
+    );
+  }
+
   const body = await request.json();
   const { testPackId } = body as { testPackId?: string };
+
   if (!testPackId) {
     return NextResponse.json({ error: "testPackId required" }, { status: 400 });
   }
@@ -106,34 +127,19 @@ export async function POST(request: NextRequest) {
   }
 
   const admin = getAdminClient();
-
-  // Get current metadata
-  const { data: fullUser, error: userErr } = await admin.auth.admin.getUserById(user.id);
-  if (userErr || !fullUser) {
-    return NextResponse.json({ error: "Failed to load user" }, { status: 500 });
-  }
-
-  const meta = (fullUser.user.user_metadata ?? {}) as Record<string, unknown>;
-  const currentBalance: number = typeof meta.credits === "number" ? meta.credits : 0;
+  const currentBalance = await ensureCreditsRow(admin, user.id);
   const newBalance = currentBalance + pack.credits;
 
-  const newTransaction = {
-    id: crypto.randomUUID(),
+  await admin
+    .from("credits")
+    .update({ balance: newBalance, updated_at: new Date().toISOString() })
+    .eq("user_id", user.id);
+
+  await admin.from("credit_transactions").insert({
+    user_id: user.id,
     amount: pack.credits,
     type: "purchase",
     description: `[TEST] Purchased ${pack.credits} credit${pack.credits > 1 ? "s" : ""} (${pack.name} pack)`,
-    created_at: new Date().toISOString(),
-  };
-
-  const history: unknown[] = Array.isArray(meta.credit_history) ? meta.credit_history : [];
-  const updatedHistory = [newTransaction, ...history].slice(0, 20); // keep last 20
-
-  await admin.auth.admin.updateUserById(user.id, {
-    user_metadata: {
-      ...meta,
-      credits: newBalance,
-      credit_history: updatedHistory,
-    },
   });
 
   return NextResponse.json({
