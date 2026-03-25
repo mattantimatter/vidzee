@@ -420,8 +420,8 @@ export default function AdminPage() {
                   <div className="space-y-2">
                     <Sparkline data={stats.userGrowthSeries.map((d) => d.count)} color="#3b82f6" />
                     <div className="flex justify-between text-xs text-neutral-400">
-                      <span>{formatShortDate(stats.userGrowthSeries[0].date)}</span>
-                      <span>{formatShortDate(stats.userGrowthSeries[stats.userGrowthSeries.length - 1].date)}</span>
+                      <span>{formatShortDate(stats.userGrowthSeries[0]?.date ?? "")}</span>
+                      <span>{formatShortDate(stats.userGrowthSeries[stats.userGrowthSeries.length - 1]?.date ?? "")}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2 mt-3">
                       {stats.userGrowthSeries.slice(-7).map((d) => (
@@ -444,8 +444,8 @@ export default function AdminPage() {
                   <div className="space-y-2">
                     <Sparkline data={stats.revenueSeries.map((d) => d.amount)} color="#10b981" />
                     <div className="flex justify-between text-xs text-neutral-400">
-                      <span>{formatShortDate(stats.revenueSeries[0].date)}</span>
-                      <span>{formatShortDate(stats.revenueSeries[stats.revenueSeries.length - 1].date)}</span>
+                      <span>{formatShortDate(stats.revenueSeries[0]?.date ?? "")}</span>
+                      <span>{formatShortDate(stats.revenueSeries[stats.revenueSeries.length - 1]?.date ?? "")}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-2 mt-3">
                       {stats.revenueSeries.slice(-7).map((d) => (
