@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   MessageSquare,
-  X,
   Send,
   Loader2,
   AlertTriangle,
@@ -91,7 +90,7 @@ export function SupportChat() {
     setLoading(false);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sendMessage = async (convId: string, content: string, currentMessages: Message[]) => {
+  const sendMessage = async (convId: string, content: string, _currentMessages?: Message[]) => {
     const userMsg: Message = {
       id: `user-${Date.now()}`,
       role: "user",
