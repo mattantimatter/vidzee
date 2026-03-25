@@ -10,12 +10,14 @@ import {
   Plus,
   Sparkles,
   X,
+  ShieldCheck,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { VidzeeLogo } from "./vidzee-logo";
+import { SupportChat } from "./support-chat";
 
 const ease = [0.23, 1, 0.32, 1] as const;
 
@@ -23,6 +25,8 @@ const ease = [0.23, 1, 0.32, 1] as const;
 const SIDEBAR_COLLAPSED_W = 64; // 4rem
 /** Expanded sidebar width in pixels — must match the inline style below */
 const SIDEBAR_EXPANDED_W = 224; // 14rem
+
+const ADMIN_EMAILS = ["matt@antimatter.ai", "mattbravo@gmail.com"];
 
 const iconNavItems = [
   { href: "/app", label: "Dashboard", icon: Home },
@@ -164,6 +168,36 @@ export function AppShell({
             );
           })}
         </nav>
+
+        {/* Admin link — only shown to admin users */}
+        {ADMIN_EMAILS.includes(user.email ?? "") && (
+          <div className={`mb-1 ${expanded ? "px-2" : "px-0"}`}>
+            <Link
+              href="/admin"
+              className={`flex items-center transition-colors overflow-hidden ${
+                pathname.startsWith("/admin")
+                  ? "bg-accent/10 text-accent"
+                  : "text-neutral-400 hover:text-neutral-700 hover:bg-neutral-100"
+              } ${
+                expanded
+                  ? "gap-3 h-10 rounded-xl px-3 min-w-0"
+                  : "w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] rounded-xl mx-auto flex items-center justify-center shrink-0"
+              }`}
+              title="Admin"
+            >
+              {expanded ? (
+                <>
+                  <ShieldCheck className="w-5 h-5 shrink-0" />
+                  <span className="text-sm font-medium whitespace-nowrap flex-1 overflow-hidden min-w-0">Admin</span>
+                </>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-5 h-5 shrink-0" />
+                </div>
+              )}
+            </Link>
+          </div>
+        )}
 
         {/* Bottom icons — same collapsed centering as main nav */}
         <div className={`flex flex-col gap-1 mt-auto ${expanded ? "px-2" : "px-0"}`}>
@@ -331,6 +365,9 @@ export function AppShell({
           {children}
         </div>
       </main>
+
+      {/* Support Chat Widget */}
+      <SupportChat />
     </div>
   );
 }
