@@ -57,7 +57,7 @@ export async function GET(request: Request) {
   const revenueMap: Record<string, number> = {};
   for (const t of purchaseTxns) {
     const match = (t.description as string)?.match(/\$(\d+)/);
-    const dollars = match ? parseInt(match[1]) : 0;
+    const dollars = match && match[1] ? parseInt(match[1]) : 0;
     totalRevenue += dollars;
     const d = new Date(t.created_at as string);
     if (d >= thirtyDaysAgo) {
