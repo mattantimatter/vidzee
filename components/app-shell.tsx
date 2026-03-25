@@ -325,7 +325,7 @@ export function AppShell({
           h-screen + overflow-hidden so each page can scroll independently.
       ── */}
       <main
-        className="h-screen pt-14 md:pt-0 md:ml-16 overflow-hidden bg-neutral-50/80 dark:bg-background"
+        className="h-screen pt-14 md:pt-0 md:ml-16 overflow-hidden bg-white dark:bg-background"
       >
         <div className="h-full flex flex-col min-h-0">
           {children}

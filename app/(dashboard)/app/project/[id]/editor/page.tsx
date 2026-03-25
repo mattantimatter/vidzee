@@ -758,12 +758,12 @@ export default function EditorPage(): ReactNode {
         {/* ─── Main Content ────────────────────────────────────────────── */}
         <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
           {/* ─── Preview Player ───────────────────────────────────────── */}
-          <div className="lg:flex-1 min-h-0 flex flex-col items-center justify-center bg-neutral-950 p-4 relative">
-            {/* Task 7: Respect aspect ratio in preview */}
+          <div className="lg:flex-1 min-h-0 flex flex-col items-center justify-center bg-neutral-950 p-2 md:p-4 relative">
+            {/* Respect aspect ratio in preview */}
             <div
               className={`relative bg-black rounded-lg overflow-hidden ${
                 isPortrait
-                  ? "h-full max-h-[70vh] aspect-[9/16]"
+                  ? "max-h-[40vh] md:max-h-[55vh] lg:h-full lg:max-h-[72vh] aspect-[9/16]"
                   : "w-full max-w-2xl aspect-video"
               }`}
             >

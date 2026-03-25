@@ -431,21 +431,25 @@ export default function GeneratePage(): ReactNode {
 
                           <div className="p-3">
                             {clipUrl ? (
-                              <video
-                                key={clipUrl}
-                                src={clipUrl}
-                                controls
-                                autoPlay
-                                muted
-                                playsInline
-                                className="w-full rounded-lg shadow-sm"
-                              />
+                              <div className="relative w-full aspect-video rounded-lg overflow-hidden bg-black shadow-sm">
+                                <video
+                                  key={clipUrl}
+                                  src={clipUrl}
+                                  controls
+                                  autoPlay
+                                  muted
+                                  playsInline
+                                  className="absolute inset-0 w-full h-full object-contain"
+                                />
+                              </div>
                             ) : (
-                              <img
-                                src={getAssetUrl(scene.asset_id)}
-                                alt=""
-                                className="w-full rounded-lg shadow-sm"
-                              />
+                              <div className="relative w-full aspect-video rounded-lg overflow-hidden shadow-sm">
+                                <img
+                                  src={getAssetUrl(scene.asset_id)}
+                                  alt=""
+                                  className="absolute inset-0 w-full h-full object-cover"
+                                />
+                              </div>
                             )}
                             {render && (
                               <p className="text-xs text-neutral-400 mt-2 text-center">
