@@ -1,32 +1,26 @@
 /**
- * POST /api/projects/[id]/music — Generate background music via Fal.ai Beatoven
+ * POST /api/projects/[id]/music — Generate background music via Fal.ai stable-audio
  * GET  /api/projects/[id]/music?requestId=xxx — Poll for music generation status
  *
- * Task 1 Fix: Music is generated for the FULL video duration (not per-clip).
- * The caller calculates total video duration and passes it as `duration`.
+ * Uses fal-ai/stable-audio (Stable Audio Open) — reliable, fast, supports custom duration.
+ * Input: { prompt, seconds_total }
+ * Output: { audio_file: { url } }
  *
- * Uses the Fal.ai queue pattern:
- * 1. POST to submit → get request_id
- * 2. GET status → check if COMPLETED
- * 3. GET result → get audio URL
- *
- * The generated audio URL is returned to the client, which saves it
- * as part of the editor state in the renders table.
+ * Music is generated for the FULL video duration (not per-clip).
  */
-
 import { NextResponse, type NextRequest } from "next/server";
 
 const FAL_API_KEY = process.env.FAL_KEY ?? process.env.FAL_API_KEY ?? "";
-const FAL_QUEUE_URL = "https://queue.fal.run/beatoven/music-generation";
-const FAL_STATUS_URL = "https://queue.fal.run/beatoven/music-generation/requests";
+const FAL_ENDPOINT = "fal-ai/stable-audio";
+const FAL_QUEUE_URL = `https://queue.fal.run/${FAL_ENDPOINT}`;
+const FAL_STATUS_URL = `https://queue.fal.run/${FAL_ENDPOINT}/requests`;
 
 // ─── POST: Submit music generation ──────────────────────────────────────────
-
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await params; // consume params (project ID available if needed for logging)
+  await params;
 
   if (!FAL_API_KEY) {
     return NextResponse.json(
@@ -39,33 +33,34 @@ export async function POST(
     const body = await request.json();
     const genre = (body.genre ?? "ambient") as string;
 
-    // Task 1: Accept total video duration from caller.
-    // The editor calculates: sum of (trimEnd - trimStart) for all clips.
-    // Clamp between 15s and 120s (Beatoven API limits).
+    // Accept total video duration from caller.
+    // Stable Audio supports up to 190s; clamp between 10s and 180s.
     const totalDuration = typeof body.duration === "number" ? body.duration : 30;
-    const duration = Math.max(15, Math.min(120, Math.round(totalDuration)));
+    const seconds_total = Math.max(10, Math.min(180, Math.round(totalDuration)));
 
-    console.log(`[Music] Generating ${duration}s track for genre: ${genre} (requested: ${totalDuration}s)`);
+    console.log(`[Music] Generating ${seconds_total}s track for genre: ${genre}`);
 
-    // Build the prompt based on genre
+    // Build prompt based on genre
     const genrePrompts: Record<string, string> = {
       ambient:
-        "Calm ambient background music for a luxury real estate property video tour, soft pads, gentle atmosphere, elegant and modern",
+        "Calm ambient background music for a luxury real estate property video tour, soft pads, gentle atmosphere, elegant and modern, no vocals",
       "cinematic piano":
-        "Cinematic piano background music for an upscale real estate property tour, emotional, elegant, inspiring, soft strings accompaniment",
+        "Cinematic piano background music for an upscale real estate property tour, emotional, elegant, inspiring, soft strings, no vocals",
       "upbeat electronic":
-        "Upbeat electronic background music for a modern real estate property showcase, energetic but not overwhelming, clean production, contemporary feel",
+        "Upbeat electronic background music for a modern real estate property showcase, energetic but not overwhelming, clean production, contemporary feel, no vocals",
       acoustic:
-        "Warm acoustic guitar background music for a cozy real estate home tour, inviting, friendly, natural feel, light percussion",
-      "cinematic Piano":
-        "Cinematic piano background music for an upscale real estate property tour, emotional, elegant, inspiring, soft strings accompaniment",
+        "Warm acoustic guitar background music for a cozy real estate home tour, inviting, friendly, natural feel, light percussion, no vocals",
+      jazz:
+        "Smooth jazz background music for an elegant real estate property tour, sophisticated, warm, professional, no vocals",
+      orchestral:
+        "Orchestral background music for a luxury real estate property video, sweeping, cinematic, grand, inspiring, no vocals",
     };
 
     const normalizedGenre = genre.toLowerCase();
     const prompt =
       genrePrompts[genre] ??
       genrePrompts[normalizedGenre] ??
-      "Background music for a real estate property video tour, elegant and professional";
+      "Background music for a real estate property video tour, elegant and professional, no vocals";
 
     // Submit to Fal.ai queue
     const submitRes = await fetch(FAL_QUEUE_URL, {
@@ -76,7 +71,8 @@ export async function POST(
       },
       body: JSON.stringify({
         prompt,
-        duration,
+        seconds_total,
+        steps: 100,
       }),
     });
 
@@ -84,44 +80,27 @@ export async function POST(
       const errorText = await submitRes.text();
       console.error("[Music] Fal.ai submit error:", submitRes.status, errorText);
       return NextResponse.json(
-        {
-          error: `Music generation failed: ${submitRes.status}`,
-          details: errorText,
-        },
+        { error: `Music generation failed: ${submitRes.status}`, details: errorText },
         { status: submitRes.status }
       );
     }
 
-    const submitData = await submitRes.json();
+    const submitData = await submitRes.json() as { request_id?: string; audio_file?: { url: string } };
     const requestId = submitData.request_id;
 
     if (!requestId) {
-      // If the response already contains the audio URL (synchronous response)
-      const audioUrl =
-        submitData.audio?.url ??
-        submitData.audio_file?.url ??
-        submitData.output?.url ??
-        submitData.url;
-
+      // Synchronous response (unlikely but handle it)
+      const audioUrl = submitData.audio_file?.url;
       if (audioUrl) {
-        return NextResponse.json({
-          status: "completed",
-          audioUrl,
-          duration,
-        });
+        return NextResponse.json({ status: "completed", audioUrl, duration: seconds_total });
       }
-
       return NextResponse.json(
         { error: "No request_id or audio URL in response", raw: submitData },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({
-      status: "pending",
-      requestId,
-      duration,
-    });
+    return NextResponse.json({ status: "pending", requestId, duration: seconds_total });
   } catch (err) {
     console.error("[Music] Error:", err);
     return NextResponse.json(
@@ -131,22 +110,18 @@ export async function POST(
   }
 }
 
-// ─── GET: Check music generation status ─────────────────────────────────────
-
+// ─── GET: Poll music generation status ──────────────────────────────────────
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await params; // consume params
+  await params;
 
   const { searchParams } = new URL(request.url);
   const requestId = searchParams.get("requestId");
 
   if (!requestId) {
-    return NextResponse.json(
-      { error: "requestId is required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "requestId is required" }, { status: 400 });
   }
 
   if (!FAL_API_KEY) {
@@ -157,11 +132,9 @@ export async function GET(
   }
 
   try {
-    // Check status
+    // Check queue status
     const statusRes = await fetch(`${FAL_STATUS_URL}/${requestId}/status`, {
-      headers: {
-        Authorization: `Key ${FAL_API_KEY}`,
-      },
+      headers: { Authorization: `Key ${FAL_API_KEY}` },
     });
 
     if (!statusRes.ok) {
@@ -173,15 +146,13 @@ export async function GET(
       );
     }
 
-    const statusData = await statusRes.json();
+    const statusData = await statusRes.json() as { status: string; queue_position?: number; error?: string };
     const queueStatus = statusData.status;
 
     if (queueStatus === "COMPLETED") {
       // Fetch the result
       const resultRes = await fetch(`${FAL_STATUS_URL}/${requestId}`, {
-        headers: {
-          Authorization: `Key ${FAL_API_KEY}`,
-        },
+        headers: { Authorization: `Key ${FAL_API_KEY}` },
       });
 
       if (!resultRes.ok) {
@@ -191,18 +162,14 @@ export async function GET(
         );
       }
 
-      const resultData = await resultRes.json();
+      const resultData = await resultRes.json() as { audio_file?: { url: string }; audio?: { url: string }; url?: string };
       const audioUrl =
-        resultData.audio?.url ??
         resultData.audio_file?.url ??
-        resultData.output?.url ??
+        resultData.audio?.url ??
         resultData.url;
 
       if (audioUrl) {
-        return NextResponse.json({
-          status: "completed",
-          audioUrl,
-        });
+        return NextResponse.json({ status: "completed", audioUrl });
       }
 
       return NextResponse.json({

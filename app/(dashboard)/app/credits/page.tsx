@@ -379,39 +379,53 @@ export default function CreditsPage(): ReactNode {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-neutral-100 dark:border-neutral-800 bg-neutral-50/80 dark:bg-neutral-800/50">
-                    <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                      Date
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                      Description
-                    </th>
-                    <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">
-                      Credits
-                    </th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Date</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Description</th>
+                    <th className="text-left px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider hidden sm:table-cell">Type</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">Credits</th>
+                    <th className="text-right px-4 py-3 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider hidden sm:table-cell">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {transactions.map((tx) => (
-                    <tr
-                      key={tx.id}
-                      className="border-b border-neutral-50 dark:border-neutral-800/80 last:border-0 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30"
-                    >
-                      <td className="px-4 py-3 text-neutral-500 dark:text-neutral-400 whitespace-nowrap text-xs">
-                        {formatDate(tx.created_at)}
-                      </td>
-                      <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">
-                        {tx.description ?? tx.type}
-                      </td>
-                      <td
-                        className={`px-4 py-3 text-right font-semibold tabular-nums ${
-                          tx.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
-                        }`}
+                  {transactions.map((tx) => {
+                    const packPriceMap: Record<string, number> = { starter: 19, pro: 79, agent: 149 };
+                    const packMatch = tx.description?.match(/\(([a-z]+) pack\)/i);
+                    const packKey = packMatch?.[1]?.toLowerCase() ?? "";
+                    const dollarAmount = tx.type === "purchase" && packKey in packPriceMap
+                      ? packPriceMap[packKey] : null;
+                    const typeBadgeClass: Record<string, string> = {
+                      purchase: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400",
+                      usage: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400",
+                      refund: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
+                      bonus: "bg-accent/10 text-accent",
+                    };
+                    return (
+                      <tr
+                        key={tx.id}
+                        className="border-b border-neutral-50 dark:border-neutral-800/80 last:border-0 hover:bg-neutral-50/50 dark:hover:bg-neutral-800/30"
                       >
-                        {tx.amount > 0 ? "+" : ""}
-                        {tx.amount}
-                      </td>
-                    </tr>
-                  ))}
+                        <td className="px-4 py-3.5 text-neutral-500 dark:text-neutral-400 whitespace-nowrap text-xs">
+                          {formatDate(tx.created_at)}
+                        </td>
+                        <td className="px-4 py-3.5 text-neutral-700 dark:text-neutral-300 max-w-[180px] truncate">
+                          {tx.description ?? tx.type}
+                        </td>
+                        <td className="px-4 py-3.5 hidden sm:table-cell">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${typeBadgeClass[tx.type] ?? "bg-neutral-100 text-neutral-600"}`}>
+                            {tx.type}
+                          </span>
+                        </td>
+                        <td className={`px-4 py-3.5 text-right font-semibold tabular-nums ${
+                          tx.amount > 0 ? "text-green-600 dark:text-green-400" : "text-red-500 dark:text-red-400"
+                        }`}>
+                          {tx.amount > 0 ? "+" : ""}{tx.amount} cr
+                        </td>
+                        <td className="px-4 py-3.5 text-right text-neutral-500 dark:text-neutral-400 tabular-nums text-xs hidden sm:table-cell">
+                          {dollarAmount != null ? `$${dollarAmount.toFixed(2)}` : tx.type === "usage" ? `−` : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

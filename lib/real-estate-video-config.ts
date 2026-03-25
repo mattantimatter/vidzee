@@ -6,7 +6,7 @@
 export const GROK_I2V_ENDPOINT = "xai/grok-imagine-video/image-to-video" as const;
 
 /** Short per-scene clips (seconds). Grok accepts integer duration. */
-export const DEFAULT_CLIP_DURATION_SEC = 5;
+export const DEFAULT_CLIP_DURATION_SEC = 3;
 
 export const DEFAULT_RESOLUTION = "720p" as const;
 export type ClipResolution = "720p" | "480p";

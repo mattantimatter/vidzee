@@ -582,17 +582,17 @@ export default function EditorPage(): ReactNode {
     }
     setGeneratingMusic(true);
     setMusicError(null);
-    const targetDuration = Math.max(15, Math.min(120, Math.round(totalDuration)));
+    const targetDuration = Math.max(10, Math.min(180, Math.round(totalDuration)));
     setMusicDurationAtGeneration(targetDuration);
 
     try {
-      // Pass the FULL video duration (not per-clip)
+      // Pass the FULL video duration. stable-audio supports up to 180s.
       const res = await fetch(`/api/projects/${projectId}/music`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           genre: musicGenre,
-          duration: Math.max(15, Math.min(120, Math.round(totalDuration))),
+          duration: Math.max(10, Math.min(180, Math.round(totalDuration))),
         }),
       });
 
@@ -624,7 +624,8 @@ export default function EditorPage(): ReactNode {
               musicPollRef.current = null;
               setMusicError(pollData.error ?? "Music generation failed");
               setGeneratingMusic(false);
-            } else if (elapsed >= 180) {
+            } else if (elapsed >= 300) {
+              // 5-minute timeout for stable-audio (longer tracks take more time)
               if (musicPollRef.current) clearInterval(musicPollRef.current);
               musicPollRef.current = null;
               setMusicError("Music generation timed out — please try again");
@@ -721,7 +722,7 @@ export default function EditorPage(): ReactNode {
   const currentClip = clips[currentClipIndex];
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-neutral-950">
       <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
         {/* ─── Header ──────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-4 py-2 border-b border-neutral-200 bg-white shrink-0">
@@ -767,11 +768,11 @@ export default function EditorPage(): ReactNode {
                   : "w-full max-w-2xl aspect-video"
               }`}
             >
-              {/* Current video */}
+              {/* Current video — use object-contain so portrait clips don't stretch in landscape container */}
               <video
                 ref={videoRef}
                 src={currentClip?.clipUrl}
-                className="absolute inset-0 w-full h-full object-cover"
+                className={`absolute inset-0 w-full h-full ${isPortrait ? "object-contain" : "object-cover"}`}
                 style={
                   transitionProgress < 1 && currentClip
                     ? getTransitionStyle(currentClip.transition, transitionProgress)

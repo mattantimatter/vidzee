@@ -162,7 +162,7 @@ export default function NewProjectPage(): ReactNode {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-neutral-950">
       <div className="flex-1 min-h-0 flex gap-6 p-4 md:p-6 lg:p-8">
         {/* Left Panel — Content / Upload */}
         <div className="flex-1 min-w-0 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>

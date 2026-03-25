@@ -5,6 +5,7 @@ import type { Render, StoryboardScene, Asset } from "@/lib/types";
 import {
   ArrowRight,
   CheckCircle2,
+  Download,
   Film,
   Loader2,
   Play,
@@ -248,7 +249,7 @@ export default function GeneratePage(): ReactNode {
   const selectedClipUrl = getClipUrl(selectedRender);
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 bg-white dark:bg-neutral-950">
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-4 md:gap-6 p-4 md:p-6 lg:p-8 overflow-hidden">
         {/* Left Panel */}
         <div
@@ -386,13 +387,24 @@ export default function GeneratePage(): ReactNode {
                           {scene.caption}
                         </p>
                       )}
+                      {status === "done" && clipUrl && (
+                        <a
+                          href={clipUrl}
+                          download={`scene-${i + 1}.mp4`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent hover:underline min-h-[44px] sm:min-h-0"
+                        >
+                          <Download className="w-3 h-3" />
+                          Download
+                        </a>
+                      )}
                       {status === "failed" && render && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             retryScene(render.id);
                           }}
-                          className="mt-1.5 inline-flex items-center gap-1 text-xs text-accent hover:underline min-h-[44px] sm:min-h-0"
+                          className="mt-1.5 inline-flex items-center gap-1 text-xs text-red-500 hover:underline min-h-[44px] sm:min-h-0"
                         >
                           <RefreshCw className="w-3 h-3" />
                           Retry
@@ -504,15 +516,25 @@ export default function GeneratePage(): ReactNode {
             >
               {selectedClipUrl ? (
                 /* Show video player when clip is done */
-                <video
-                  key={selectedClipUrl}
-                  src={selectedClipUrl}
-                  controls
-                  autoPlay
-                  muted
-                  playsInline
-                  className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg"
-                />
+                <div className="w-full flex flex-col items-center gap-3">
+                  <video
+                    key={selectedClipUrl}
+                    src={selectedClipUrl}
+                    controls
+                    autoPlay
+                    muted
+                    playsInline
+                    className="max-w-full max-h-[60vh] object-contain rounded-xl shadow-lg"
+                  />
+                  <a
+                    href={selectedClipUrl}
+                    download={`scene-${(scenes.findIndex(s => s.id === selectedSceneId) + 1)}.mp4`}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white border border-neutral-200 text-xs font-medium text-neutral-700 hover:bg-neutral-50 hover:border-accent/40 transition-colors shadow-sm"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Download Clip
+                  </a>
+                </div>
               ) : (
                 /* Show source photo when clip is not done */
                 <img
