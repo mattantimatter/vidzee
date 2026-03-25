@@ -11,6 +11,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { CREDIT_PACKS } from "@/lib/types";
+import type Stripe from "stripe";
 
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY ?? "";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://vidzee.vercel.app";
@@ -55,8 +56,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid pack ID" }, { status: 400 });
   }
 
-  const priceId = STRIPE_PRICE_IDS[packId];
-
   // If Stripe is not configured, return test mode response
   if (!STRIPE_SECRET_KEY) {
     return NextResponse.json({
@@ -68,29 +67,33 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Dynamically import Stripe to avoid issues if key is not set
-    const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(STRIPE_SECRET_KEY, {
+    const StripeLib = (await import("stripe")).default;
+    const stripe = new StripeLib(STRIPE_SECRET_KEY, {
       apiVersion: "2026-01-28.clover",
     });
 
-    const session = await stripe.checkout.sessions.create({
-      line_items: [
-        {
-          price: priceId ?? undefined,
-          ...(priceId ? {} : {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: `Vidzee ${pack.name} Credits`,
-                description: `${pack.credits} video credit${pack.credits > 1 ? "s" : ""} for Vidzee real estate videos`,
-              },
-              unit_amount: Math.round(pack.price * 100),
-            },
-          }),
-          quantity: 1,
+    const priceId = STRIPE_PRICE_IDS[packId];
+
+    // Build line item — use saved Price ID if available, otherwise build inline
+    let lineItem: Stripe.Checkout.SessionCreateParams.LineItem;
+    if (priceId) {
+      lineItem = { price: priceId, quantity: 1 };
+    } else {
+      lineItem = {
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `Vidzee ${pack.name} Credits`,
+            description: `${pack.credits} video credit${pack.credits > 1 ? "s" : ""} for Vidzee real estate videos`,
+          },
+          unit_amount: Math.round(pack.price * 100),
         },
-      ],
+        quantity: 1,
+      };
+    }
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      line_items: [lineItem],
       mode: "payment",
       success_url: `${APP_URL}/app/credits?session_id={CHECKOUT_SESSION_ID}&success=true`,
       cancel_url: `${APP_URL}/app/credits?cancelled=true`,
@@ -99,7 +102,6 @@ export async function POST(request: NextRequest) {
         pack_id: pack.id,
         credits: pack.credits.toString(),
       },
-      ...(user.email ? { customer_email: user.email } : {}),
       payment_intent_data: {
         metadata: {
           user_id: user.id,
@@ -108,7 +110,13 @@ export async function POST(request: NextRequest) {
         },
       },
       allow_promotion_codes: true,
-    });
+    };
+
+    if (user.email) {
+      sessionParams.customer_email = user.email;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionParams);
 
     return NextResponse.json({ checkoutUrl: session.url });
   } catch (err) {
