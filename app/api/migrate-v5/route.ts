@@ -1,8 +1,25 @@
-import { createClient } from "@supabase/supabase-js";
+/**
+ * POST /api/migrate-v5 — Create support tables and api_usage_logs
+ * Uses pg directly to run DDL (Supabase REST API doesn't support DDL)
+ */
 import { NextResponse } from "next/server";
+import { Pool } from "pg";
+
+const ADMIN_SECRET = process.env.ADMIN_SECRET ?? "vidzee-admin-2026";
+
+// Build the Postgres connection string from Supabase URL
+function getConnectionString(): string {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  // Extract project ref from URL: https://iiwsgivctcqlfqabytxp.supabase.co
+  const projectRef = supabaseUrl.replace("https://", "").replace(".supabase.co", "");
+  // Supabase direct DB connection: postgres://postgres.[ref]:[password]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+  // The service role key is NOT the DB password. Use the SUPABASE_DB_PASSWORD if available.
+  const dbPassword = process.env.SUPABASE_DB_PASSWORD ?? serviceKey;
+  return `postgresql://postgres.${projectRef}:${dbPassword}@aws-0-us-east-1.pooler.supabase.com:6543/postgres`;
+}
 
 const SQL_STATEMENTS = [
-  // Support conversations
   `CREATE TABLE IF NOT EXISTS support_conversations (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -16,7 +33,6 @@ const SQL_STATEMENTS = [
     admin_notes text,
     satisfaction_rating integer CHECK (satisfaction_rating BETWEEN 1 AND 5)
   )`,
-  // Support messages
   `CREATE TABLE IF NOT EXISTS support_messages (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     conversation_id uuid REFERENCES support_conversations(id) ON DELETE CASCADE NOT NULL,
@@ -25,85 +41,89 @@ const SQL_STATEMENTS = [
     created_at timestamptz DEFAULT now(),
     metadata jsonb DEFAULT '{}'::jsonb
   )`,
-  // API usage logs
   `CREATE TABLE IF NOT EXISTS api_usage_logs (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-    project_id uuid REFERENCES projects(id) ON DELETE SET NULL,
     provider text NOT NULL,
     endpoint text NOT NULL,
-    status text NOT NULL DEFAULT 'success' CHECK (status IN ('success', 'error', 'timeout')),
+    success boolean NOT NULL DEFAULT true,
     duration_ms integer,
     cost_usd numeric(10, 6),
     metadata jsonb DEFAULT '{}'::jsonb,
     created_at timestamptz DEFAULT now()
   )`,
-  // Admin users allowlist
-  `CREATE TABLE IF NOT EXISTS admin_users (
-    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
-    created_at timestamptz DEFAULT now()
-  )`,
-  // Indexes
   `CREATE INDEX IF NOT EXISTS idx_support_conversations_user_id ON support_conversations(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_support_conversations_status ON support_conversations(status)`,
   `CREATE INDEX IF NOT EXISTS idx_support_messages_conversation_id ON support_messages(conversation_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_api_usage_logs_user_id ON api_usage_logs(user_id)`,
   `CREATE INDEX IF NOT EXISTS idx_api_usage_logs_created_at ON api_usage_logs(created_at)`,
-  // RLS
   `ALTER TABLE support_conversations ENABLE ROW LEVEL SECURITY`,
   `ALTER TABLE support_messages ENABLE ROW LEVEL SECURITY`,
   `ALTER TABLE api_usage_logs ENABLE ROW LEVEL SECURITY`,
-  `ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY`,
-  // Policies
-  `DROP POLICY IF EXISTS "Users can view own conversations" ON support_conversations`,
-  `CREATE POLICY "Users can view own conversations" ON support_conversations FOR SELECT USING (auth.uid() = user_id)`,
-  `DROP POLICY IF EXISTS "Users can create conversations" ON support_conversations`,
-  `CREATE POLICY "Users can create conversations" ON support_conversations FOR INSERT WITH CHECK (auth.uid() = user_id)`,
-  `DROP POLICY IF EXISTS "Users can update own conversations" ON support_conversations`,
-  `CREATE POLICY "Users can update own conversations" ON support_conversations FOR UPDATE USING (auth.uid() = user_id)`,
-  `DROP POLICY IF EXISTS "Users can view own messages" ON support_messages`,
-  `CREATE POLICY "Users can view own messages" ON support_messages FOR SELECT USING (
-    EXISTS (SELECT 1 FROM support_conversations WHERE id = support_messages.conversation_id AND user_id = auth.uid())
-  )`,
-  `DROP POLICY IF EXISTS "Users can create messages" ON support_messages`,
-  `CREATE POLICY "Users can create messages" ON support_messages FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM support_conversations WHERE id = support_messages.conversation_id AND user_id = auth.uid())
-  )`,
-  `DROP POLICY IF EXISTS "Service role full access conversations" ON support_conversations`,
-  `CREATE POLICY "Service role full access conversations" ON support_conversations FOR ALL USING (true) WITH CHECK (true)`,
-  `DROP POLICY IF EXISTS "Service role full access messages" ON support_messages`,
-  `CREATE POLICY "Service role full access messages" ON support_messages FOR ALL USING (true) WITH CHECK (true)`,
-  `DROP POLICY IF EXISTS "Service role full access api_logs" ON api_usage_logs`,
-  `CREATE POLICY "Service role full access api_logs" ON api_usage_logs FOR ALL USING (true) WITH CHECK (true)`,
-  `DROP POLICY IF EXISTS "Service role full access admin_users" ON admin_users`,
-  `CREATE POLICY "Service role full access admin_users" ON admin_users FOR ALL USING (true) WITH CHECK (true)`,
+  `DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'support_conversations' AND policyname = 'Service role full access conversations') THEN
+      CREATE POLICY "Service role full access conversations" ON support_conversations FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+  END $$`,
+  `DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'support_messages' AND policyname = 'Service role full access messages') THEN
+      CREATE POLICY "Service role full access messages" ON support_messages FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+  END $$`,
+  `DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'api_usage_logs' AND policyname = 'Service role full access api_logs') THEN
+      CREATE POLICY "Service role full access api_logs" ON api_usage_logs FOR ALL USING (true) WITH CHECK (true);
+    END IF;
+  END $$`,
 ];
 
 export async function POST(request: Request) {
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get("secret");
-  if (secret !== (process.env.ADMIN_SECRET ?? "vidzee-admin-2026")) {
+  if (secret !== ADMIN_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  );
+  const connString = getConnectionString();
+  const pool = new Pool({ connectionString: connString, ssl: { rejectUnauthorized: false } });
 
   const results: { sql: string; ok: boolean; error?: string }[] = [];
 
-  for (const sql of SQL_STATEMENTS) {
-    const { error } = await supabase.rpc("exec_sql", { sql_string: sql }).single();
-    if (error && !error.message.includes("already exists")) {
-      results.push({ sql: sql.slice(0, 60), ok: false, error: error.message });
-    } else {
-      results.push({ sql: sql.slice(0, 60), ok: true });
+  let client;
+  try {
+    client = await pool.connect();
+  } catch (e: unknown) {
+    await pool.end();
+    return NextResponse.json({
+      error: "Failed to connect to database",
+      detail: String(e),
+      connString: connString.replace(/:[^:@]+@/, ":***@"),
+    }, { status: 500 });
+  }
+
+  try {
+    for (const sql of SQL_STATEMENTS) {
+      try {
+        await client.query(sql);
+        results.push({ sql: sql.slice(0, 60), ok: true });
+      } catch (e: unknown) {
+        const msg = String(e);
+        if (msg.includes("already exists") || msg.includes("duplicate")) {
+          results.push({ sql: sql.slice(0, 60), ok: true });
+        } else {
+          results.push({ sql: sql.slice(0, 60), ok: false, error: msg.slice(0, 200) });
+        }
+      }
     }
+  } finally {
+    client.release();
+    await pool.end();
   }
 
   const failed = results.filter((r) => !r.ok);
-  return NextResponse.json({ results, failed: failed.length, total: results.length });
+  return NextResponse.json({
+    results,
+    failed: failed.length,
+    total: results.length,
+    success: failed.length === 0,
+  });
 }
