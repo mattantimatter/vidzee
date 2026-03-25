@@ -489,7 +489,7 @@ export default function ResultsPage(): ReactNode {
               </motion.button>
             </motion.div>
           )}
-          {/* Rendering state */
+          {/* Rendering state */}
           {isRendering && !hasDoneRenders && (
             <motion.div
               initial={{ opacity: 0 }}
