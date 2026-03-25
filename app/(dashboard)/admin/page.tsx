@@ -563,7 +563,7 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-neutral-50">
                     {stats.recentTransactions.map((t) => {
                       const match = (t.description as string)?.match(/\$(\d+)/);
-                      const dollars = match ? parseInt(match[1]) : null;
+                      const dollars = match && match[1] ? parseInt(match[1]) : null;
                       return (
                         <tr key={t.id} className="hover:bg-neutral-50 transition-colors">
                           <td className="px-5 py-3.5 text-neutral-700">{t.description ?? "—"}</td>
