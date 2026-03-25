@@ -15,9 +15,9 @@ import {
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { VidzeeLogo } from "./vidzee-logo";
-import { SupportChat } from "./support-chat";
+import { SupportChat, type SupportChatHandle } from "./support-chat";
 
 const ease = [0.23, 1, 0.32, 1] as const;
 
@@ -34,10 +34,6 @@ const iconNavItems = [
   { href: "/app/credits", label: "Credits", icon: Sparkles },
 ];
 
-const bottomNavItems = [
-  { href: "#", label: "Support", icon: HelpCircle },
-];
-
 export function AppShell({
   user,
   children,
@@ -51,6 +47,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const supportChatRef = useRef<SupportChatHandle>(null);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -82,6 +79,10 @@ export function AppShell({
   const expanded = hovered;
   const sidebarW = expanded ? SIDEBAR_EXPANDED_W : SIDEBAR_COLLAPSED_W;
 
+  const openSupportChat = () => {
+    supportChatRef.current?.open();
+  };
+
   return (
     <div className="h-screen overflow-hidden bg-background">
       {/* ── Desktop Sidebar — FIXED to left edge, full viewport height ── */}
@@ -91,9 +92,9 @@ export function AppShell({
         className="hidden md:flex fixed top-0 left-0 h-screen flex-col border-r border-border bg-white dark:bg-neutral-900 py-4 shrink-0 overflow-hidden z-40 transition-all duration-300 ease-in-out"
         style={{ width: sidebarW }}
       >
-        {/* Logo — collapsed: centered in fixed square hit area */}
+        {/* Logo — links to /app (dashboard) when logged in */}
         <Link
-          href="/"
+          href="/app"
           className={`flex items-center mb-6 h-9 ${
             expanded ? "gap-2.5 px-3 min-w-0" : "w-10 h-9 min-w-[2.5rem] rounded-xl mx-auto justify-center shrink-0"
           }`}
@@ -199,33 +200,32 @@ export function AppShell({
           </div>
         )}
 
-        {/* Bottom icons — same collapsed centering as main nav */}
+        {/* Bottom icons — Support button opens chat, sign out */}
         <div className={`flex flex-col gap-1 mt-auto ${expanded ? "px-2" : "px-0"}`}>
-          {bottomNavItems.map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`flex items-center transition-colors overflow-hidden text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 ${
-                expanded
-                  ? "gap-3 h-10 rounded-xl px-3 min-w-0"
-                  : "w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] rounded-xl mx-auto flex items-center justify-center shrink-0"
-              }`}
-              title={item.label}
-            >
-              {expanded ? (
-                <>
-                  <item.icon className="w-5 h-5 shrink-0" aria-hidden />
-                  <span className="text-sm font-medium whitespace-nowrap flex-1 overflow-hidden min-w-0">
-                    {item.label}
-                  </span>
-                </>
-              ) : (
-                <div className="w-full h-full flex items-center justify-center shrink-0">
-                  <item.icon className="w-5 h-5 shrink-0" aria-hidden />
-                </div>
-              )}
-            </Link>
-          ))}
+          {/* Support button — opens the chat widget */}
+          <button
+            type="button"
+            onClick={openSupportChat}
+            className={`flex items-center transition-colors overflow-hidden text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 w-full ${
+              expanded
+                ? "gap-3 h-10 rounded-xl px-3 min-w-0"
+                : "w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] rounded-xl mx-auto flex items-center justify-center shrink-0"
+            }`}
+            title="Support"
+          >
+            {expanded ? (
+              <>
+                <HelpCircle className="w-5 h-5 shrink-0" aria-hidden />
+                <span className="text-sm font-medium whitespace-nowrap flex-1 overflow-hidden min-w-0">
+                  Support
+                </span>
+              </>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center shrink-0">
+                <HelpCircle className="w-5 h-5 shrink-0" aria-hidden />
+              </div>
+            )}
+          </button>
 
           {/* Sign out */}
           <button
@@ -261,7 +261,7 @@ export function AppShell({
       {/* Mobile Header */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white dark:bg-neutral-900 border-b border-border">
         <div className="flex items-center justify-between px-4 h-14">
-          <Link href="/" className="flex items-center gap-2 shrink-0">
+          <Link href="/app" className="flex items-center gap-2 shrink-0">
             <VidzeeLogo className="w-7 h-7 text-accent" />
             <span className="font-semibold text-neutral-900 dark:text-white">Vidzee</span>
           </Link>
@@ -338,6 +338,15 @@ export function AppShell({
                     </Link>
                   );
                 })}
+                {/* Mobile support button */}
+                <button
+                  type="button"
+                  onClick={() => { setSidebarOpen(false); openSupportChat(); }}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100 hover:bg-neutral-100 dark:hover:bg-neutral-800 w-full"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  Support
+                </button>
               </nav>
               <div className="absolute bottom-4 left-4 right-4">
                 <button
@@ -367,7 +376,7 @@ export function AppShell({
       </main>
 
       {/* Support Chat Widget */}
-      <SupportChat />
+      <SupportChat ref={supportChatRef} />
     </div>
   );
 }

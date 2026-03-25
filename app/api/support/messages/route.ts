@@ -110,10 +110,10 @@ export async function POST(request: Request) {
     .order("created_at", { ascending: true })
     .limit(20);
 
-  // Call Kimi API
-  const kimi = new OpenAI({
-    apiKey: process.env.KIMI_API_KEY,
-    baseURL: process.env.KIMI_BASE_URL ?? "https://api.moonshot.cn/v1",
+  // Call AI support agent
+  const ai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
   });
 
   const messages = (history ?? []).map((m) => ({
@@ -125,8 +125,8 @@ export async function POST(request: Request) {
   let shouldEscalate = false;
 
   try {
-    const completion = await kimi.chat.completions.create({
-      model: "moonshot-v1-8k",
+    const completion = await ai.chat.completions.create({
+      model: "gpt-4.1-mini",
       messages: [
         { role: "system", content: KIMI_SYSTEM_PROMPT },
         ...messages,
@@ -143,7 +143,7 @@ export async function POST(request: Request) {
       aiContent = aiContent.replace("[ESCALATE]", "").trim();
     }
   } catch (err) {
-    console.error("Kimi API error:", err);
+    console.error("AI support agent error:", err);
     aiContent = "I'm having trouble connecting right now. Please try again in a moment, or our team will follow up with you shortly.";
     shouldEscalate = true;
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   MessageSquare,
@@ -25,6 +25,10 @@ interface Conversation {
   subject: string;
 }
 
+export interface SupportChatHandle {
+  open: () => void;
+}
+
 const SUGGESTED_QUESTIONS = [
   "How do I create a new video project?",
   "Why is my clip generation stuck?",
@@ -33,7 +37,7 @@ const SUGGESTED_QUESTIONS = [
   "How do I export in portrait mode?",
 ];
 
-export function SupportChat() {
+export const SupportChat = forwardRef<SupportChatHandle>(function SupportChat(_props, ref) {
   const [open, setOpen] = useState(false);
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -44,6 +48,11 @@ export function SupportChat() {
   const [unread, setUnread] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Expose open() method to parent via ref
+  useImperativeHandle(ref, () => ({
+    open: () => handleOpen(),
+  }));
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -162,9 +171,6 @@ export function SupportChat() {
   const handleOpen = () => {
     setOpen(true);
     setUnread(0);
-    if (!conversation && messages.length === 0) {
-      // Show welcome state — don't auto-create conversation yet
-    }
   };
 
   return (
@@ -208,7 +214,7 @@ export function SupportChat() {
             <div className="flex items-center justify-between px-5 py-4 bg-accent text-white shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-                  <Sparkles className="w-4.5 h-4.5" />
+                  <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
                   <p className="font-semibold text-sm">Vidzee Support</p>
@@ -314,7 +320,6 @@ export function SupportChat() {
                   </div>
                 </div>
               )}
-
               <div ref={bottomRef} />
             </div>
 
@@ -351,11 +356,11 @@ export function SupportChat() {
                   )}
                 </button>
               </div>
-              <p className="text-center text-xs text-neutral-300 mt-2">Powered by Kimi AI · 98% issues resolved automatically</p>
+              <p className="text-center text-xs text-neutral-300 mt-2">Powered by Vidzee AI · 98% issues resolved automatically</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
     </>
   );
-}
+});
