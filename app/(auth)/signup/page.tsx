@@ -68,7 +68,7 @@ export default function SignupPage(): ReactNode {
     const { error: authError } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/app`,
+        redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
     if (authError) {
