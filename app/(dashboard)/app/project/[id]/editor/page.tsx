@@ -194,6 +194,7 @@ export default function EditorPage(): ReactNode {
   const [musicUrl, setMusicUrl] = useState<string | null>(null);
   const [musicVolume, setMusicVolume] = useState(0.3);
   const [musicGenre, setMusicGenre] = useState("ambient");
+  const [musicPrompt, setMusicPrompt] = useState("");
   const [generatingMusic, setGeneratingMusic] = useState(false);
   const [musicError, setMusicError] = useState<string | null>(null);
   const [musicDurationAtGeneration, setMusicDurationAtGeneration] = useState<number | null>(null);
@@ -282,6 +283,7 @@ export default function EditorPage(): ReactNode {
       setMusicUrl(savedState.musicUrl ?? null);
       setMusicVolume(savedState.musicVolume ?? 0.3);
       setMusicGenre(savedState.musicGenre ?? "ambient");
+      setMusicPrompt(((savedState as unknown) as Record<string, unknown>).musicPrompt as string ?? "");
       if (savedState.editStyle) setEditStyle(savedState.editStyle);
     } else {
       const editorClips: EditorClip[] = [];
@@ -442,12 +444,13 @@ export default function EditorPage(): ReactNode {
 
   const saveEditorState = useCallback(async () => {
     setSaving(true);
-    const editorState: EditorState = {
+    const editorState = {
       clips,
       overlays,
       musicUrl,
       musicVolume,
       musicGenre,
+      musicPrompt,
       totalDuration,
       editStyle,
     };
@@ -484,7 +487,7 @@ export default function EditorPage(): ReactNode {
       .eq("id", projectId);
 
     setSaving(false);
-  }, [clips, overlays, musicUrl, musicVolume, musicGenre, totalDuration, editStyle, projectId, supabase]);
+  }, [clips, overlays, musicUrl, musicVolume, musicGenre, musicPrompt, totalDuration, editStyle, projectId, supabase]);
 
   // ─── Clip Operations ───────────────────────────────────────────────────
 
@@ -592,6 +595,7 @@ export default function EditorPage(): ReactNode {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           genre: musicGenre,
+          ...(musicPrompt.trim() ? { prompt: musicPrompt.trim() } : {}),
           duration: Math.max(10, Math.min(180, Math.round(totalDuration))),
         }),
       });
@@ -646,7 +650,7 @@ export default function EditorPage(): ReactNode {
       setMusicError(err instanceof Error ? err.message : "Music generation failed");
       setGeneratingMusic(false);
     }
-  }, [projectId, musicGenre, totalDuration]);
+  }, [projectId, musicGenre, musicPrompt, totalDuration]);
 
   // Auto-clear stale music when clips are removed and duration drifts significantly
   const prevClipsLengthRef = useRef<number>(0);
@@ -860,6 +864,20 @@ export default function EditorPage(): ReactNode {
                       <option key={g.value} value={g.value}>{g.label}</option>
                     ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-neutral-500 mb-1">
+                    Custom Prompt
+                    <span className="ml-1 text-neutral-400 font-normal">(optional — overrides genre)</span>
+                  </label>
+                  <textarea
+                    value={musicPrompt}
+                    onChange={(e) => setMusicPrompt(e.target.value)}
+                    placeholder="e.g. Uplifting acoustic guitar with light percussion, warm and inviting, no vocals"
+                    rows={3}
+                    className="w-full px-3 py-2 rounded-lg border border-neutral-200 text-xs bg-white resize-none placeholder:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-neutral-400"
+                  />
                 </div>
 
                 <motion.button

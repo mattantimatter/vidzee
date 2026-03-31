@@ -32,35 +32,45 @@ export async function POST(
   try {
     const body = await request.json();
     const genre = (body.genre ?? "ambient") as string;
+    const customPrompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
 
     // Accept total video duration from caller.
     // Stable Audio supports up to 190s; clamp between 10s and 180s.
     const totalDuration = typeof body.duration === "number" ? body.duration : 30;
     const seconds_total = Math.max(10, Math.min(180, Math.round(totalDuration)));
 
-    console.log(`[Music] Generating ${seconds_total}s track for genre: ${genre}`);
+    console.log(`[Music] Generating ${seconds_total}s track — ${customPrompt ? "custom prompt" : `genre: ${genre}`}`);
 
-    // Build prompt based on genre
-    const genrePrompts: Record<string, string> = {
-      ambient:
-        "Calm ambient background music for a luxury real estate property video tour, soft pads, gentle atmosphere, elegant and modern, no vocals",
-      "cinematic piano":
-        "Cinematic piano background music for an upscale real estate property tour, emotional, elegant, inspiring, soft strings, no vocals",
-      "upbeat electronic":
-        "Upbeat electronic background music for a modern real estate property showcase, energetic but not overwhelming, clean production, contemporary feel, no vocals",
-      acoustic:
-        "Warm acoustic guitar background music for a cozy real estate home tour, inviting, friendly, natural feel, light percussion, no vocals",
-      jazz:
-        "Smooth jazz background music for an elegant real estate property tour, sophisticated, warm, professional, no vocals",
-      orchestral:
-        "Orchestral background music for a luxury real estate property video, sweeping, cinematic, grand, inspiring, no vocals",
-    };
-
-    const normalizedGenre = genre.toLowerCase();
-    const prompt =
-      genrePrompts[genre] ??
-      genrePrompts[normalizedGenre] ??
-      "Background music for a real estate property video tour, elegant and professional, no vocals";
+    // Use custom prompt if provided, otherwise build from genre
+    let prompt: string;
+    if (customPrompt) {
+      // Append real estate context if not already mentioned
+      const hasContext = /real estate|property|home|listing|realt/i.test(customPrompt);
+      prompt = hasContext
+        ? customPrompt
+        : `${customPrompt}, suitable for a real estate property video, no vocals`;
+    } else {
+      // Build prompt based on genre
+      const genrePrompts: Record<string, string> = {
+        ambient:
+          "Calm ambient background music for a luxury real estate property video tour, soft pads, gentle atmosphere, elegant and modern, no vocals",
+        "cinematic piano":
+          "Cinematic piano background music for an upscale real estate property tour, emotional, elegant, inspiring, soft strings, no vocals",
+        "upbeat electronic":
+          "Upbeat electronic background music for a modern real estate property showcase, energetic but not overwhelming, clean production, contemporary feel, no vocals",
+        acoustic:
+          "Warm acoustic guitar background music for a cozy real estate home tour, inviting, friendly, natural feel, light percussion, no vocals",
+        jazz:
+          "Smooth jazz background music for an elegant real estate property tour, sophisticated, warm, professional, no vocals",
+        orchestral:
+          "Orchestral background music for a luxury real estate property video, sweeping, cinematic, grand, inspiring, no vocals",
+      };
+      const normalizedGenre = genre.toLowerCase();
+      prompt =
+        genrePrompts[genre] ??
+        genrePrompts[normalizedGenre] ??
+        "Background music for a real estate property video tour, elegant and professional, no vocals";
+    }
 
     // Submit to Fal.ai queue
     const submitRes = await fetch(FAL_QUEUE_URL, {
