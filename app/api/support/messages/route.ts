@@ -22,6 +22,7 @@ CAPABILITIES YOU CAN HELP WITH:
 - How to edit clips, reorder scenes, and adjust timing
 - How background music generation works (AI-generated, matches video length)
 - How to export and download the final video
+- All new users receive 100 free welcome credits on signup (enough for ~100 videos)
 - Credit purchases and pricing (Starter $19/1 credit, Pro $79/5 credits, Agent $149/10 credits)
 - Portrait (9:16 for Reels/TikTok) vs Landscape (16:9 for YouTube/MLS) formats
 - Troubleshooting stuck generations, failed clips, or render errors

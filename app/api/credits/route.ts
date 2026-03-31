@@ -50,22 +50,22 @@ async function ensureCreditsRow(
 
   if (existing) return existing.balance as number;
 
-  // First visit — create row with 2 welcome credits
+  // First visit — create row with 100 welcome credits
   const { data: inserted } = await admin
     .from("credits")
-    .insert({ user_id: userId, balance: 2 })
+    .insert({ user_id: userId, balance: 100 })
     .select("balance")
     .single();
 
   // Record welcome bonus transaction
   await admin.from("credit_transactions").insert({
     user_id: userId,
-    amount: 2,
+    amount: 100,
     type: "bonus",
-    description: "Welcome bonus — 2 free credits",
+    description: "Welcome bonus — 100 free credits",
   });
 
-  return (inserted?.balance as number) ?? 2;
+  return (inserted?.balance as number) ?? 100;
 }
 
 export async function GET() {
